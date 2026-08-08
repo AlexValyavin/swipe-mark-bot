@@ -35,33 +35,33 @@ export async function POST(req: NextRequest) {
 
   if (!fromId) return NextResponse.json({ ok: true });
 
-  // Принудительный ответ, чтобы бот не "молчал"
   try {
     const adminDb = getAdminDb();
     
-    // Robust extraction
     const caption = message.caption || "";
     const text = message.text || "";
     const content = caption || text || "Без текста";
     const urls = extractUrls(content);
     
-    const data = {
+    // Создаем "чистый" объект без undefined
+    const data: Record<string, any> = {
       userId: `tg:${fromId}`,
       createdAt: new Date().toISOString(),
       title: content.slice(0, 200),
       url: urls[0] || null,
       type: "text",
-      imageUrl: null as string | null,
-      fileId: null as string | null,
       swipedCount: 0,
       readTimeMin: 1,
-      domain: urls.length > 0 ? new URL(urls[0]).hostname : undefined,
     };
+
+    if (urls.length > 0) {
+      data.domain = new URL(urls[0]).hostname;
+    }
 
     if (message.photo) {
       data.type = "photo";
       data.fileId = message.photo[message.photo.length - 1].file_id;
-      data.imageUrl = "https://via.placeholder.com/300"; // Заглушка, так как прямую ссылку на фото из TG получить сложнее без API
+      data.imageUrl = "https://via.placeholder.com/300";
     } else if (message.video) {
       data.type = "video";
       data.fileId = message.video.file_id;
