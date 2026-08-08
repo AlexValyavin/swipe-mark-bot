@@ -9,6 +9,7 @@ export default function Home() {
   const [userId, setUserId] = useState<string | null>(null);
   const [allCards, setAllCards] = useState<CardData[]>([]);
   const [archivedCards, setArchivedCards] = useState<CardData[]>([]);
+  const [cardIndex, setCardIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"inbox" | "archive">("inbox");
@@ -42,17 +43,20 @@ export default function Home() {
       });
   }, [initData, user?.id]);
 
+  const handleSwipe = (card: CardData, direction: "left" | "right" | "up") => {
+    if (direction === "right" || direction === "up") {
+      setArchivedCards((prev) => [...prev, card]);
+    }
+    setCardIndex((i) => i + 1);
+  };
+
+  const resetCards = () => {
+    setCardIndex(0);
+  };
+
   const inboxCards = allCards.filter(
     (c) => !archivedCards.find((a) => a.id === c.id)
   );
-
-  const handleSwipe = (card: CardData, direction: "left" | "right" | "up") => {
-    if (direction === "right" || direction === "up") {
-      // Отправляем в архив
-      setArchivedCards((prev) => [...prev, card]);
-    }
-    // direction === "left" — просто пропускаем (удаляем из очереди)
-  };
 
   if (!isMiniApp) {
     return (
@@ -133,7 +137,24 @@ export default function Home() {
       {/* Inbox — свайп-дек */}
       {tab === "inbox" &&
         (inboxCards.length > 0 ? (
-          <SwipeDeck cards={inboxCards} onSwipe={handleSwipe} />
+          cardIndex < inboxCards.length ? (
+            <SwipeDeck
+              cards={inboxCards}
+              onSwipe={handleSwipe}
+              index={cardIndex}
+            />
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3">
+              <span className="text-4xl">🎉</span>
+              <p className="text-neutral-500">Всё разобрано!</p>
+              <button
+                onClick={resetCards}
+                className="mt-2 rounded-full bg-neutral-800 px-6 py-2 text-sm text-neutral-300"
+              >
+                Показать заново
+              </button>
+            </div>
+          )
         ) : allCards.length > 0 ? (
           <div className="flex flex-1 items-center justify-center text-neutral-500">
             Всё разобрано! 🎉
