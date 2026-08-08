@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
   const baseUrl = `https://${host}`;
   const chatId = message.chat.id;
   const fromId = message.from?.id;
+
   const reply = async (text: string) => {
     if (!token) return;
     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -27,15 +28,13 @@ export async function POST(req: NextRequest) {
 
   if (!fromId) return NextResponse.json({ ok: true });
 
-  // /start — приветствие + кнопка
   if (message.text === "/start") {
     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: chatId,
-        text:
-          "Отправь мне ссылку, фото, видео или перешли сообщение — я сохраню это в SwipeMark.\n\nНажми кнопку ниже, чтобы открыть приложение.",
+        text: "Отправь мне ссылку, фото, видео или перешли сообщение — я сохраню это в SwipeMark.\n\nНажми кнопку ниже, чтобы открыть приложение.",
         reply_markup: {
           inline_keyboard: [[{ text: "Открыть SwipeMark", url: baseUrl }]],
         },
@@ -45,103 +44,44 @@ export async function POST(req: NextRequest) {
   }
 
   const adminDb = getAdminDb();
-  const saveBookmark = async (data: Record<string, unknown>) => {
-    await adminDb.collection("bookmarks").add({
-      userId: `tg:${fromId}`,
-      createdAt: new Date().toISOString(),
-      ...data,
-    });
+  
+  // Robust extraction
+  const caption = message.caption || "";
+  const text = message.text || "";
+  const content = caption || text || "";
+  const urls = extractUrls(content);
+  
+  const data = {
+    userId: `tg:${fromId}`,
+    createdAt: new Date().toISOString(),
+    title: content.slice(0, 200) || "Без заголовка",
+    url: urls[0] || null,
+    type: "text",
+    imageUrl: null as string | null,
+    fileId: null as string | null,
+    swipedCount: 0,
+    readTimeMin: 1,
+    domain: undefined as string | undefined,
   };
 
-  // Фото
   if (message.photo) {
-    const photo = message.photo.pop(); // самое большое
-    const caption = message.caption || "";
-    const title = caption || "Фото";
-
-    await saveBookmark({
-      type: "photo",
-      fileId: photo.file_id,
-      caption: caption,
-      title: title.slice(0, 200),
-      url: caption ? extractUrls(caption)[0] || null : null,
-    });
-
-    await reply(`✅ Сохранено: ${title}`);
-    return NextResponse.json({ ok: true });
+    data.type = "photo";
+    data.fileId = message.photo[message.photo.length - 1].file_id;
+    data.imageUrl = data.fileId; // UI expects imageUrl
+  } else if (message.video) {
+    data.type = "video";
+    data.fileId = message.video.file_id;
+    data.imageUrl = data.fileId;
+  } else if (message.forward_from || message.forward_origin) {
+    data.type = "forward";
+  } else if (urls.length > 0) {
+    data.type = "link";
+    data.domain = new URL(urls[0]).hostname;
   }
 
-  // Видео
-  if (message.video) {
-    const caption = message.caption || "";
-    const title = caption || "Видео";
-
-    await saveBookmark({
-      type: "video",
-      fileId: message.video.file_id,
-      caption,
-      title: title.slice(0, 200),
-      url: caption ? extractUrls(caption)[0] || null : null,
-    });
-
-    await reply(`✅ Сохранено: ${title}`);
-    return NextResponse.json({ ok: true });
-  }
-
-  // Пересланное сообщение (forward_from)
-  if (message.forward_from) {
-    // Пытаемся извлечь контент из пересланного сообщения
-    const text = message.text || "";
-    const caption = message.caption || "";
-    const content = text || caption;
-    const urls = extractUrls(content);
-
-    if (urls.length > 0) {
-      const url = urls[0];
-      await saveBookmark({
-        type: "forward",
-        title: content.replace(url, "").trim().slice(0, 200) || url,
-        url,
-      });
-      await reply(`✅ Сохранено: ${url}`);
-    } else if (content) {
-      await saveBookmark({
-        type: "forward",
-        title: content.slice(0, 200),
-        url: null,
-      });
-      await reply(`✅ Сохранено`);
-    } else {
-      await reply("Не вижу текста или ссылки в пересланном сообщении.");
-    }
-    return NextResponse.json({ ok: true });
-  }
-
-  // Текст — ищем ссылку
-  if (message.text) {
-    const urls = extractUrls(message.text);
-    if (urls.length > 0) {
-      const url = urls[0];
-      const title = message.text.replace(url, "").trim() || url;
-
-      await saveBookmark({
-        type: "link",
-        title: title.slice(0, 200),
-        url,
-      });
-
-      await reply(`✅ Сохранено: ${title}`);
-    } else {
-      await saveBookmark({
-        type: "text",
-        title: message.text.slice(0, 200),
-        url: null,
-      });
-      await reply(`✅ Сохранено`);
-    }
-    return NextResponse.json({ ok: true });
-  }
-
+  await adminDb.collection("bookmarks").add(data);
+  await reply(`✅ Сохранено: ${data.title.slice(0, 30)}...`);
+  
   return NextResponse.json({ ok: true });
 }
 
