@@ -3,15 +3,21 @@ import { getAdminDb } from "@/lib/firebase-admin";
 
 export const runtime = "nodejs";
 
-type BookmarkData = {
+export interface Bookmark {
+  id: string;
   userId: string;
   url?: string;
   title?: string;
+  description?: string;
+  imageUrl?: string;
   type?: string;
   caption?: string;
   fileId?: string;
   createdAt: string;
-};
+  domain?: string;
+  swipedCount: number;
+  readTimeMin: number;
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -30,7 +36,7 @@ export async function GET(req: NextRequest) {
 
     const bookmarks = snapshot.docs
       .map((doc) => {
-        const data = doc.data() as BookmarkData;
+        const data = doc.data() as Omit<Bookmark, "id">;
         return { id: doc.id, ...data };
       })
       .sort(

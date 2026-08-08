@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useTelegram } from "@/components/TelegramProvider";
-import { SwipeDeck, type CardData } from "@/components/SwipeDeck";
+import { SwipeDeck } from "@/components/SwipeDeck";
+import type { Bookmark } from "@/app/api/bookmarks/route";
 
 export default function Home() {
   const twa = useTelegram();
   const [userId, setUserId] = useState<string | null>(null);
-  const [allCards, setAllCards] = useState<CardData[]>([]);
-  const [archivedCards, setArchivedCards] = useState<CardData[]>([]);
-  const [cardIndex, setCardIndex] = useState(0);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [archived, setArchived] = useState<Bookmark[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"inbox" | "archive">("inbox");
@@ -33,7 +33,7 @@ export default function Home() {
         if (data.error) {
           setError(data.error);
         } else {
-          setAllCards(data.bookmarks || []);
+          setBookmarks(data.bookmarks || []);
         }
         setLoading(false);
       })
@@ -43,20 +43,17 @@ export default function Home() {
       });
   }, [initData, user?.id]);
 
-  const handleSwipe = (card: CardData, direction: "left" | "right" | "up") => {
-    if (direction === "right" || direction === "up") {
-      setArchivedCards((prev) => [...prev, card]);
-    }
-    setCardIndex((i) => i + 1);
-  };
-
-  const resetCards = () => {
-    setCardIndex(0);
-  };
-
-  const inboxCards = allCards.filter(
-    (c) => !archivedCards.find((a) => a.id === c.id)
+  const inbox = bookmarks.filter(
+    (b) => !archived.find((a) => a.id === b.id)
   );
+
+  const handleFinished = () => {
+    setArchived((prev) => [...prev, ...inbox]);
+  };
+
+  const reset = () => {
+    setArchived([]);
+  };
 
   if (!isMiniApp) {
     return (
@@ -120,7 +117,6 @@ export default function Home() {
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col">
-      {/* Шапка */}
       <header className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
         <h1 className="text-lg font-bold tracking-tight">
           Swipe<span className="text-indigo-400">Mark</span>
@@ -145,43 +141,31 @@ export default function Home() {
             }`}
           >
             Архив
-            {archivedCards.length > 0 && (
+            {archived.length > 0 && (
               <span className="ml-1.5 rounded-full bg-indigo-500 px-1.5 py-0.5 text-[10px] text-white">
-                {archivedCards.length}
+                {archived.length}
               </span>
             )}
           </button>
         </div>
       </header>
 
-      {/* Inbox */}
-      {tab === "inbox" && (
-        inboxCards.length > 0 ? (
-          cardIndex < inboxCards.length ? (
-            <SwipeDeck
-              cards={inboxCards}
-              onSwipe={handleSwipe}
-              index={cardIndex}
-            />
-          ) : (
-            <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-              <div className="text-6xl">🎉</div>
-              <p className="text-lg font-medium text-neutral-300">Всё разобрано!</p>
-              <p className="text-sm text-neutral-500">
-                {archivedCards.length} сохранений в архиве
-              </p>
-              <button
-                onClick={resetCards}
-                className="mt-2 rounded-full bg-neutral-800 px-6 py-2 text-sm text-neutral-300 hover:bg-neutral-700 transition-colors"
-              >
-                Показать снова
-              </button>
-            </div>
-          )
-        ) : allCards.length > 0 ? (
+      {tab === "inbox" &&
+        (inbox.length > 0 ? (
+          <SwipeDeck bookmarks={inbox} onFinished={handleFinished} />
+        ) : bookmarks.length > 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
             <div className="text-6xl">🎉</div>
-            <p className="text-neutral-400">Всё уже разобрано</p>
+            <p className="text-lg font-medium text-neutral-300">Всё разобрано!</p>
+            <p className="text-sm text-neutral-500">
+              {archived.length} сохранений в архиве
+            </p>
+            <button
+              onClick={reset}
+              className="mt-2 rounded-full bg-neutral-800 px-6 py-2 text-sm text-neutral-300 hover:bg-neutral-700 transition-colors"
+            >
+              Показать снова
+            </button>
           </div>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
@@ -193,14 +177,12 @@ export default function Home() {
               Отправь ссылку, фото или видео боту @SwipeMarkBot — они появятся здесь.
             </p>
           </div>
-        )
-      )}
+        ))}
 
-      {/* Archive */}
-      {tab === "archive" && (
-        archivedCards.length > 0 ? (
+      {tab === "archive" &&
+        (archived.length > 0 ? (
           <div className="flex flex-1 flex-col gap-1 overflow-y-auto p-4 hide-scrollbar">
-            {archivedCards.map((c) => (
+            {archived.map((c) => (
               <div
                 key={c.id}
                 className="group rounded-xl bg-neutral-900 p-4 transition-colors hover:bg-neutral-800"
@@ -242,8 +224,7 @@ export default function Home() {
             <p className="text-neutral-400">Архив пуст</p>
             <p className="text-sm text-neutral-500">Свайпни вправо, чтобы сохранить ссылку</p>
           </div>
-        )
-      )}
+        ))}
     </div>
   );
 }
