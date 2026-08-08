@@ -14,6 +14,7 @@ export interface Bookmark {
   caption?: string;
   fileId?: string;
   videoUrl?: string;
+  forwardUrl?: string;
   createdAt: string;
   domain?: string;
   swipedCount: number;

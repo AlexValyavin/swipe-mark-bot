@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Undo2, ExternalLink } from "lucide-react";
 import { useTelegram } from "@/components/TelegramProvider";
 import { SwipeDeck } from "@/components/SwipeDeck";
 import type { SwipeDirection } from "@/components/BookmarkCard";
+import { getOpenTarget } from "@/lib/openTarget";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 
 export default function Home() {
@@ -56,6 +58,19 @@ export default function Home() {
   const reset = () => {
     setArchived([]);
     setDeck(bookmarks);
+  };
+
+  const returnToDeck = (bookmark: Bookmark) => {
+    setArchived((prev) => prev.filter((b) => b.id !== bookmark.id));
+    setDeck((prev) => [bookmark, ...prev]);
+    setTab("inbox");
+  };
+
+  const openBookmark = (bookmark: Bookmark) => {
+    const target = getOpenTarget(bookmark);
+    if (target) {
+      window.open(target, "_blank", "noopener,noreferrer");
+    }
   };
 
   if (!isMiniApp) {
@@ -206,10 +221,26 @@ export default function Home() {
                       </a>
                     )}
                   </div>
-                  <div className="flex-shrink-0 self-start">
+                  <div className="flex flex-shrink-0 items-center gap-1.5 self-start">
                     <span className="rounded-md bg-neutral-800 px-2 py-1 text-[10px] text-neutral-500">
                       {c.type === "photo" ? "📷" : c.type === "video" ? "🎬" : c.type === "text" ? "📝" : c.type === "forward" ? "📨" : "🔗"}
                     </span>
+                    <button
+                      onClick={() => returnToDeck(c)}
+                      aria-label="Вернуть в стопку"
+                      title="Вернуть в стопку"
+                      className="flex size-8 items-center justify-center rounded-full bg-neutral-800 text-neutral-300 transition-colors hover:bg-neutral-700"
+                    >
+                      <Undo2 className="size-4" />
+                    </button>
+                    <button
+                      onClick={() => openBookmark(c)}
+                      aria-label="Открыть"
+                      title="Открыть"
+                      className="flex size-8 items-center justify-center rounded-full bg-neutral-800 text-indigo-400 transition-colors hover:bg-neutral-700"
+                    >
+                      <ExternalLink className="size-4" />
+                    </button>
                   </div>
                 </div>
                 <p className="mt-2 text-[10px] text-neutral-600">
@@ -227,7 +258,7 @@ export default function Home() {
           <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
             <div className="text-5xl">🗂️</div>
             <p className="text-neutral-400">Архив пуст</p>
-            <p className="text-sm text-neutral-500">Свайпни вправо, чтобы сохранить ссылку</p>
+            <p className="text-sm text-neutral-500">Свайпни влево, чтобы отправить в архив</p>
           </div>
         ))}
     </div>

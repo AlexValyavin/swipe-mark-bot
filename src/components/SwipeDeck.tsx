@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { X, ExternalLink, Undo2 } from "lucide-react";
 import { BookmarkCard, type SwipeDirection } from "@/components/BookmarkCard";
+import { getOpenTarget } from "@/lib/openTarget";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 
 export function SwipeDeck({
@@ -25,7 +26,7 @@ export function SwipeDeck({
   };
 
   const handleOpen = () => {
-    const target = current.videoUrl || current.url || current.imageUrl;
+    const target = getOpenTarget(current);
     if (target) {
       window.open(target, "_blank", "noopener,noreferrer");
     }

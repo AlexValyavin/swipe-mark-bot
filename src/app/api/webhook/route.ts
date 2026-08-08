@@ -15,6 +15,7 @@ type BookmarkData = {
   fileId?: string;
   imageUrl?: string;
   videoUrl?: string;
+  forwardUrl?: string;
   description?: string;
 };
 
@@ -89,6 +90,8 @@ export async function POST(req: NextRequest) {
       if (thumbUrl) data.imageUrl = thumbUrl;
     } else if (message.forward_from || message.forward_origin) {
       data.type = "forward";
+      const forwardUrl = buildForwardUrl(message);
+      if (forwardUrl) data.forwardUrl = forwardUrl;
     } else if (urls.length > 0) {
       data.type = "link";
       const preview = await fetchLinkPreview(urls[0]);
@@ -206,6 +209,42 @@ function resolveUrl(src: string, base: string): string {
   } catch (e) {
     return "";
   }
+}
+
+type ForwardChat = {
+  id?: number;
+  type?: string;
+  title?: string;
+  username?: string;
+};
+
+type ForwardOrigin = {
+  message_id?: number;
+  chat?: ForwardChat;
+};
+
+function buildForwardUrl(message: {
+  forward_origin?: ForwardOrigin;
+  forward_from_message_id?: number;
+  forward_from_chat?: ForwardChat;
+}): string | null {
+  const origin = message.forward_origin;
+  const messageId = origin?.message_id || message.forward_from_message_id;
+  if (!messageId) return null;
+
+  const chat = origin?.chat || message.forward_from_chat;
+  if (!chat) return null;
+
+  if (chat.username) {
+    return `https://t.me/${chat.username}/${messageId}`;
+  }
+
+  if (typeof chat.id === "number" && chat.id < 0) {
+    const stripped = String(chat.id).replace(/^-100/, "").replace(/^-/, "");
+    return `https://t.me/c/${stripped}/${messageId}`;
+  }
+
+  return null;
 }
 
 function extractUrls(text: string): string[] {
