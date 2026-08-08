@@ -3,6 +3,16 @@ import { getAdminDb } from "@/lib/firebase-admin";
 
 export const runtime = "nodejs";
 
+type BookmarkData = {
+  userId: string;
+  url?: string;
+  title?: string;
+  type?: string;
+  caption?: string;
+  fileId?: string;
+  createdAt: string;
+};
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -16,14 +26,19 @@ export async function GET(req: NextRequest) {
     const snapshot = await adminDb
       .collection("bookmarks")
       .where("userId", "==", userId)
-      .orderBy("createdAt", "desc")
-      .limit(50)
       .get();
 
-    const bookmarks = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const bookmarks = snapshot.docs
+      .map((doc) => {
+        const data = doc.data() as BookmarkData;
+        return { id: doc.id, ...data };
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt || 0).getTime() -
+          new Date(a.createdAt || 0).getTime()
+      )
+      .slice(0, 50);
 
     return NextResponse.json({ bookmarks });
   } catch (e) {
