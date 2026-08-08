@@ -14,8 +14,12 @@ export interface Bookmark {
   type?: string;
   caption?: string;
   fileId?: string;
+  fileName?: string | null;
   videoUrl?: string;
   forwardUrl?: string;
+  sourceType?: string;
+  sourceUrl?: string | null;
+  mediaGroupId?: string;
   status?: string;
   deferUntil?: string | null;
   previousStatus?: string | null;

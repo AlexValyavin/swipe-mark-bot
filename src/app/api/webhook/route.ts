@@ -6,20 +6,28 @@ export const runtime = "nodejs";
 type BookmarkData = {
   userId: string;
   createdAt: string;
-  title: string;
+  title?: string;
   url: string | null;
   type: string;
   status: string;
+  sourceType?: string;
+  mediaGroupId?: string;
   swipedCount: number;
   readTimeMin: number;
   domain?: string;
   fileId?: string;
+  fileName?: string | null;
   imageUrl?: string;
   videoUrl?: string;
   forwardUrl?: string;
   description?: string;
   deferUntil?: string | null;
   previousStatus?: string | null;
+  sourceChatId?: string | null;
+  sourceMessageId?: string | null;
+  sourceChatUsername?: string | null;
+  sourceChatTitle?: string | null;
+  sourceUrl?: string | null;
 };
 
 export async function POST(req: NextRequest) {
@@ -56,43 +64,65 @@ export async function POST(req: NextRequest) {
 
   try {
     const adminDb = getAdminDb();
-    
+
     const caption = message.caption || "";
     const text = message.text || "";
-    const content = caption || text || "Без текста";
+    const content = caption || text;
     const urls = extractUrls(content);
-    
+
     // Создаем "чистый" объект без undefined
     const data: BookmarkData = {
       userId: `tg:${fromId}`,
       createdAt: new Date().toISOString(),
-      title: content.slice(0, 200),
       url: urls[0] || null,
       type: "text",
       status: "new",
+      sourceType: "direct",
       swipedCount: 0,
       readTimeMin: 1,
     };
+
+    if (message.media_group_id) {
+      data.mediaGroupId = message.media_group_id;
+    }
 
     if (urls.length > 0) {
       data.domain = new URL(urls[0]).hostname;
     }
 
+    let ogTitle: string | undefined;
+    let fileName: string | undefined;
+
     if (message.forward_from || message.forward_origin) {
       data.type = "forward";
-      const forwardUrl = buildForwardUrl(message);
-      if (forwardUrl) data.forwardUrl = forwardUrl;
+      data.sourceType = "forward";
+      const source = parseForwardSource(message);
+      if (source) {
+        data.sourceChatId = source.chatId;
+        data.sourceMessageId = source.messageId;
+        data.sourceChatUsername = source.username;
+        data.sourceChatTitle = source.title;
+        data.sourceUrl = source.url;
+        if (source.url) data.forwardUrl = source.url;
+      }
       if (message.photo) {
         data.fileId = message.photo[message.photo.length - 1].file_id;
         const imageUrl = await resolveFileUrl(data.fileId, token);
         if (imageUrl) data.imageUrl = imageUrl;
-      } else if (message.video) {
-        data.fileId = message.video.file_id;
-        const [videoUrl, thumbUrl] = await Promise.all([
-          resolveFileUrl(message.video.file_id, token),
-          resolveFileUrl(message.video.thumb?.file_id || message.animation?.thumb?.file_id || message.document?.thumb?.file_id, token),
+      } else if (message.video || message.animation) {
+        const media = message.video || message.animation;
+        data.fileId = media.file_id;
+        fileName = message.animation?.file_name;
+        const [fileUrl, thumbUrl] = await Promise.all([
+          resolveFileUrl(media.file_id, token),
+          resolveFileUrl(media.thumb?.file_id, token),
         ]);
-        if (videoUrl) data.videoUrl = videoUrl;
+        if (message.video && fileUrl) data.videoUrl = fileUrl;
+        if (thumbUrl) data.imageUrl = thumbUrl;
+      } else if (message.document) {
+        data.fileId = message.document.file_id;
+        fileName = message.document.file_name;
+        const thumbUrl = await resolveFileUrl(message.document.thumb?.file_id, token);
         if (thumbUrl) data.imageUrl = thumbUrl;
       }
     } else if (message.photo) {
@@ -100,26 +130,34 @@ export async function POST(req: NextRequest) {
       data.fileId = message.photo[message.photo.length - 1].file_id;
       const imageUrl = await resolveFileUrl(data.fileId, token);
       if (imageUrl) data.imageUrl = imageUrl;
-    } else if (message.video) {
-      data.type = "video";
-      data.fileId = message.video.file_id;
-      const [videoUrl, thumbUrl] = await Promise.all([
-        resolveFileUrl(message.video.file_id, token),
-        resolveFileUrl(message.video.thumb?.file_id || message.animation?.thumb?.file_id || message.document?.thumb?.file_id, token),
+    } else if (message.video || message.animation) {
+      const media = message.video || message.animation;
+      data.type = message.animation ? "animation" : "video";
+      data.fileId = media.file_id;
+      fileName = message.animation?.file_name;
+      const [fileUrl, thumbUrl] = await Promise.all([
+        resolveFileUrl(media.file_id, token),
+        resolveFileUrl(media.thumb?.file_id, token),
       ]);
-      if (videoUrl) data.videoUrl = videoUrl;
+      if (message.video && fileUrl) data.videoUrl = fileUrl;
+      if (thumbUrl) data.imageUrl = thumbUrl;
+    } else if (message.document) {
+      data.type = "document";
+      data.fileId = message.document.file_id;
+      fileName = message.document.file_name;
+      const thumbUrl = await resolveFileUrl(message.document.thumb?.file_id, token);
       if (thumbUrl) data.imageUrl = thumbUrl;
     } else if (urls.length > 0) {
       data.type = "link";
       const preview = await fetchLinkPreview(urls[0]);
       if (preview?.imageUrl) data.imageUrl = preview.imageUrl;
-      if (preview?.title && caption === "") {
-        data.title = preview.title.slice(0, 200);
-      }
+      ogTitle = preview?.title;
       if (preview?.description) {
         data.description = preview.description.slice(0, 500);
       }
     }
+
+    data.title = deriveTitle({ caption, text, ogTitle, fileName, type: data.type });
 
     await adminDb.collection("bookmarks").add(data);
     await reply(`✅ Сохранено: ${data.title.slice(0, 30)}...`);
@@ -240,28 +278,75 @@ type ForwardOrigin = {
   chat?: ForwardChat;
 };
 
-function buildForwardUrl(message: {
+type ForwardSource = {
+  chatId: string | null;
+  messageId: string | null;
+  username: string | null;
+  title: string | null;
+  url: string | null;
+};
+
+function parseForwardSource(message: {
   forward_origin?: ForwardOrigin;
   forward_from_message_id?: number;
   forward_from_chat?: ForwardChat;
-}): string | null {
+}): ForwardSource | null {
   const origin = message.forward_origin;
   const messageId = origin?.message_id || message.forward_from_message_id;
-  if (!messageId) return null;
-
   const chat = origin?.chat || message.forward_from_chat;
   if (!chat) return null;
 
-  if (chat.username) {
-    return `https://t.me/${chat.username}/${messageId}`;
-  }
-
-  if (typeof chat.id === "number" && chat.id < 0) {
+  let url: string | null = null;
+  if (messageId && chat.username) {
+    url = `https://t.me/${chat.username}/${messageId}`;
+  } else if (messageId && typeof chat.id === "number" && chat.id < 0) {
     const stripped = String(chat.id).replace(/^-100/, "").replace(/^-/, "");
-    return `https://t.me/c/${stripped}/${messageId}`;
+    url = `https://t.me/c/${stripped}/${messageId}`;
   }
 
-  return null;
+  return {
+    chatId: chat.id != null ? String(chat.id) : null,
+    messageId: messageId != null ? String(messageId) : null,
+    username: chat.username || null,
+    title: chat.title || null,
+    url,
+  };
+}
+
+const TITLE_MAX_LENGTH = 120;
+
+function deriveTitle(opts: {
+  caption: string;
+  text: string;
+  ogTitle?: string;
+  fileName?: string;
+  type: string;
+}): string {
+  const content = opts.caption || opts.text;
+  const firstLine = content.split(/\r?\n/)[0]?.trim() || "";
+  const isOnlyUrl = /^https?:\/\/\S+$/.test(firstLine);
+  if (firstLine && !isOnlyUrl) {
+    return firstLine.slice(0, TITLE_MAX_LENGTH);
+  }
+
+  if (opts.ogTitle) return opts.ogTitle.slice(0, TITLE_MAX_LENGTH);
+  if (opts.fileName) return opts.fileName.slice(0, TITLE_MAX_LENGTH);
+
+  switch (opts.type) {
+    case "photo":
+      return "Фото";
+    case "video":
+    case "animation":
+      return "Видео";
+    case "document":
+      return "Документ";
+    case "link":
+      return "Ссылка";
+    case "forward":
+      return "Сохранённое сообщение";
+    default:
+      return "Сохранённое сообщение";
+  }
 }
 
 function extractUrls(text: string): string[] {

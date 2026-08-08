@@ -22,6 +22,7 @@ dist/
 build/
 *.egg-info/
 .eggs/
+.next/
 
 # Logs
 *.log
