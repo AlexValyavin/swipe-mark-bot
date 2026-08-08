@@ -19,7 +19,7 @@ Mini App where users swipe through saved bookmarks. UI copy is Russian (`<html l
 ## Data flow
 1. User sends a link/photo/video/forward to @SwipeMarkBot → Telegram POSTs to `/api/webhook` → bookmark saved to Firestore `bookmarks` with `userId: "tg:<telegramId>"`. Media stores `imageUrl` (and `videoUrl` for the actual video file) as `/api/file?path=...`, which proxies files from Telegram so the bot token never reaches the client.
 2. Mini App (`src/app/page.tsx`) fetches `GET /api/bookmarks?userId=tg:<id>` and renders the swipe deck (`SwipeDeck` → `BookmarkCard`).
-3. `/api/auth` validates Telegram `initData` (HMAC-SHA256) and mints a Firebase custom token, but the frontend does NOT call it — bookmarks are fetched with an unauthenticated `userId` query param.
+3. `/api/auth` validates Telegram `initData` (HMAC-SHA256) and sets an HTTP-only session cookie (signed with `TELEGRAM_BOT_TOKEN`). The frontend calls it once on startup; all other APIs (`/api/bookmarks`) read the user from that session and return 401 without it.
 
 ## Env vars (`.env.local`, none committed)
 - `TELEGRAM_BOT_TOKEN` — used by the webhook and auth HMAC

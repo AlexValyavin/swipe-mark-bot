@@ -31,21 +31,31 @@ export default function Home() {
     const uid = `tg:${user.id}`;
     setUserId(uid);
 
-    fetch(`/api/bookmarks?userId=${uid}`)
-      .then((r) => r.json())
-      .then((data) => {
+    (async () => {
+      try {
+        const authRes = await fetch("/api/auth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData }),
+        });
+        if (!authRes.ok) {
+          throw new Error("Авторизация не прошла");
+        }
+
+        const res = await fetch("/api/bookmarks");
+        const data = await res.json();
         if (data.error) {
           setError(data.error);
         } else {
           setBookmarks(data.bookmarks || []);
           setDeck(data.bookmarks || []);
         }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Ошибка загрузки");
+      } finally {
         setLoading(false);
-      })
-      .catch((e: Error) => {
-        setError(e.message);
-        setLoading(false);
-      });
+      }
+    })();
   }, [initData, user?.id]);
 
   const handleSwipe = (direction: SwipeDirection, bookmark: Bookmark) => {
