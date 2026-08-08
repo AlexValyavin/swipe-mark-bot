@@ -3,6 +3,7 @@
 import { motion, PanInfo, useMotionValue, useTransform, animate } from "framer-motion";
 import { useRef } from "react";
 import type { Bookmark } from "@/app/api/bookmarks/route";
+import { X, Undo2, ExternalLink } from "lucide-react";
 
 export type SwipeDirection = "left" | "right" | "up";
 
@@ -34,6 +35,25 @@ export function BookmarkCard({
   const rotate = useTransform(x, [-200, 200], [-12, 12]);
   const archiveOpacity = useTransform(x, [-150, -30], [1, 0]);
   const laterOpacity = useTransform(x, [30, 150], [0, 1]);
+
+  const handleSwipeButton = (direction: SwipeDirection, e: React.MouseEvent) => {
+    e.stopPropagation();
+    dragged.current = false;
+    
+    if (direction === "up") {
+      animate(y, -300, { type: "spring", stiffness: 400, damping: 40 }).then(() => {
+        onSwipe(direction);
+        x.set(0);
+        y.set(0);
+      });
+    } else {
+      animate(x, direction === "right" ? 500 : -500, { duration: 0.2 }).then(() => {
+        onSwipe(direction);
+        x.set(0);
+        y.set(0);
+      });
+    }
+  };
 
   return (
     <motion.div
