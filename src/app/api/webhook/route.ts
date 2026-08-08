@@ -74,7 +74,24 @@ export async function POST(req: NextRequest) {
       data.domain = new URL(urls[0]).hostname;
     }
 
-    if (message.photo) {
+    if (message.forward_from || message.forward_origin) {
+      data.type = "forward";
+      const forwardUrl = buildForwardUrl(message);
+      if (forwardUrl) data.forwardUrl = forwardUrl;
+      if (message.photo) {
+        data.fileId = message.photo[message.photo.length - 1].file_id;
+        const imageUrl = await resolveFileUrl(data.fileId, token);
+        if (imageUrl) data.imageUrl = imageUrl;
+      } else if (message.video) {
+        data.fileId = message.video.file_id;
+        const [videoUrl, thumbUrl] = await Promise.all([
+          resolveFileUrl(message.video.file_id, token),
+          resolveFileUrl(message.video.thumb?.file_id || message.animation?.thumb?.file_id || message.document?.thumb?.file_id, token),
+        ]);
+        if (videoUrl) data.videoUrl = videoUrl;
+        if (thumbUrl) data.imageUrl = thumbUrl;
+      }
+    } else if (message.photo) {
       data.type = "photo";
       data.fileId = message.photo[message.photo.length - 1].file_id;
       const imageUrl = await resolveFileUrl(data.fileId, token);
@@ -88,10 +105,6 @@ export async function POST(req: NextRequest) {
       ]);
       if (videoUrl) data.videoUrl = videoUrl;
       if (thumbUrl) data.imageUrl = thumbUrl;
-    } else if (message.forward_from || message.forward_origin) {
-      data.type = "forward";
-      const forwardUrl = buildForwardUrl(message);
-      if (forwardUrl) data.forwardUrl = forwardUrl;
     } else if (urls.length > 0) {
       data.type = "link";
       const preview = await fetchLinkPreview(urls[0]);

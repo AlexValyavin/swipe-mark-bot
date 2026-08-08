@@ -52,6 +52,11 @@ export default function Home() {
     setDeck((prev) => prev.filter((b) => b.id !== bookmark.id));
     if (direction === "left") {
       setArchived((prev) => [...prev, bookmark]);
+    } else if (direction === "up") {
+      const target = getOpenTarget(bookmark);
+      if (target) {
+        window.open(target, "_blank", "noopener,noreferrer");
+      }
     }
   };
 

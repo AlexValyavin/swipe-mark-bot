@@ -15,13 +15,15 @@ export function SwipeDeck({
   onSwipe: (direction: SwipeDirection, bookmark: Bookmark) => void;
 }) {
   const [exitX, setExitX] = useState(500);
+  const [exitY, setExitY] = useState(0);
 
   if (bookmarks.length === 0) return null;
 
   const current = bookmarks[0];
 
   const handleSwipe = (direction: SwipeDirection) => {
-    setExitX(direction === "left" ? -500 : 500);
+    setExitX(direction === "left" ? -500 : direction === "up" ? 0 : 500);
+    setExitY(direction === "up" ? -300 : 0);
     onSwipe(direction, current);
   };
 
@@ -53,7 +55,7 @@ export function SwipeDeck({
             key={current.id}
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95, x: exitX }}
+            exit={{ opacity: 0, scale: 0.95, x: exitX, y: exitY }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
             className="relative h-full w-full"
             style={{ zIndex: 10 }}
