@@ -8,26 +8,25 @@ import type { Bookmark } from "@/app/api/bookmarks/route";
 
 export function SwipeDeck({
   bookmarks,
-  onFinished,
+  onSwipe,
 }: {
   bookmarks: Bookmark[];
-  onFinished: () => void;
+  onSwipe: (direction: SwipeDirection, bookmark: Bookmark) => void;
 }) {
-  const [index, setIndex] = useState(0);
   const [exitX, setExitX] = useState(500);
+
+  if (bookmarks.length === 0) return null;
+
+  const current = bookmarks[0];
 
   const handleSwipe = (direction: SwipeDirection) => {
     setExitX(direction === "left" ? -500 : 500);
-    if (index + 1 >= bookmarks.length) {
-      onFinished();
-    } else {
-      setIndex((i) => i + 1);
-    }
+    onSwipe(direction, current);
   };
 
   const handleOpen = () => {
-    if (bookmarks[index]?.url) {
-      window.open(bookmarks[index].url, "_blank", "noopener,noreferrer");
+    if (current.url) {
+      window.open(current.url, "_blank", "noopener,noreferrer");
     }
   };
 
@@ -36,7 +35,7 @@ export function SwipeDeck({
       <div className="relative flex-1 min-h-0">
         {/* Background stack for next cards - render first so they're behind */}
         <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 0 }}>
-          {bookmarks.slice(index + 1, index + 3).map((_, i) => (
+          {bookmarks.slice(1, 3).map((_, i) => (
             <motion.div
               key={i}
               className="absolute inset-0 rounded-2xl bg-neutral-900 shadow-xl"
@@ -48,24 +47,22 @@ export function SwipeDeck({
         </div>
 
         <AnimatePresence mode="popLayout">
-          {bookmarks.length > 0 && index < bookmarks.length && (
-            <motion.div
-              key={bookmarks[index].id}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95, x: exitX }}
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className="relative h-full w-full"
-              style={{ zIndex: 10 }}
-            >
-              <BookmarkCard
-                bookmark={bookmarks[index]}
-                interactive={true}
-                onSwipe={handleSwipe}
-                onOpen={handleOpen}
-              />
-            </motion.div>
-          )}
+          <motion.div
+            key={current.id}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95, x: exitX }}
+            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            className="relative h-full w-full"
+            style={{ zIndex: 10 }}
+          >
+            <BookmarkCard
+              bookmark={current}
+              interactive={true}
+              onSwipe={handleSwipe}
+              onOpen={handleOpen}
+            />
+          </motion.div>
         </AnimatePresence>
 
         {/* Progress indicator - behind the card */}
@@ -74,11 +71,7 @@ export function SwipeDeck({
             <div
               key={i}
               className={`h-1.5 rounded-full transition-all ${
-                i === index
-                  ? "w-6 bg-white"
-                  : i < index
-                  ? "w-1.5 bg-neutral-700"
-                  : "w-1.5 bg-neutral-800"
+                i === 0 ? "w-6 bg-white" : "w-1.5 bg-neutral-800"
               }`}
             />
           ))}

@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import { useTelegram } from "@/components/TelegramProvider";
 import { SwipeDeck } from "@/components/SwipeDeck";
+import type { SwipeDirection } from "@/components/BookmarkCard";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 
 export default function Home() {
   const twa = useTelegram();
   const [userId, setUserId] = useState<string | null>(null);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [deck, setDeck] = useState<Bookmark[]>([]);
   const [archived, setArchived] = useState<Bookmark[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +36,7 @@ export default function Home() {
           setError(data.error);
         } else {
           setBookmarks(data.bookmarks || []);
+          setDeck(data.bookmarks || []);
         }
         setLoading(false);
       })
@@ -43,16 +46,16 @@ export default function Home() {
       });
   }, [initData, user?.id]);
 
-  const inbox = bookmarks.filter(
-    (b) => !archived.find((a) => a.id === b.id)
-  );
-
-  const handleFinished = () => {
-    setArchived((prev) => [...prev, ...inbox]);
+  const handleSwipe = (direction: SwipeDirection, bookmark: Bookmark) => {
+    setDeck((prev) => prev.filter((b) => b.id !== bookmark.id));
+    if (direction === "left") {
+      setArchived((prev) => [...prev, bookmark]);
+    }
   };
 
   const reset = () => {
     setArchived([]);
+    setDeck(bookmarks);
   };
 
   if (!isMiniApp) {
@@ -151,9 +154,9 @@ export default function Home() {
       </header>
 
       {tab === "inbox" &&
-        (inbox.length > 0 ? (
+        (deck.length > 0 ? (
           <div className="flex-1 min-h-[400px] flex items-center justify-center px-4">
-            <SwipeDeck bookmarks={inbox} onFinished={handleFinished} />
+            <SwipeDeck bookmarks={deck} onSwipe={handleSwipe} />
           </div>
         ) : bookmarks.length > 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
