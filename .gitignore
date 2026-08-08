@@ -60,6 +60,7 @@ yarn-error.log*
 *.jsx.map
 *.ts.map
 *.tsx.map
+*.tsbuildinfo
 
 # Bundler cache (dependencies)
 .sass-cache/
