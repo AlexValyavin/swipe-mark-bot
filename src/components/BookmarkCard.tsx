@@ -38,7 +38,7 @@ export function BookmarkCard({
   return (
     <motion.div
       className="relative flex h-full w-full flex-col overflow-hidden rounded-2xl bg-neutral-900 shadow-2xl select-none"
-      style={{ x, y, rotate: interactive ? rotate : 0 }}
+      style={{ x, y, rotate: interactive ? rotate : 0, zIndex: 20 }}
       drag={interactive}
       dragMomentum={false}
       dragElastic={0.2}
