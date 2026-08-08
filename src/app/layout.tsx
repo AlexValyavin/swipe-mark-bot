@@ -1,23 +1,17 @@
 import "./globals.css";
 import { ReactNode } from "react";
-import Script from "next/script";
 import { TelegramProvider } from "@/components/TelegramProvider";
 
 export const metadata = {
   title: "SwipeMark",
   description: "Сохраняй ссылки свайпами",
+  viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ru">
-      <head>
-        <Script
-          src="https://telegram.org/js/telegram-web-app.js?63"
-          strategy="beforeInteractive"
-        />
-      </head>
-      <body className="bg-black text-white antialiased">
+      <body className="bg-black text-white antialiased h-dvh w-full overflow-hidden">
         <TelegramProvider>{children}</TelegramProvider>
       </body>
     </html>

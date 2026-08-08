@@ -152,7 +152,7 @@ export default function Home() {
 
       {tab === "inbox" &&
         (inbox.length > 0 ? (
-          <div className="flex-1 min-h-0 flex items-center justify-center px-4">
+          <div className="flex-1 min-h-[400px] flex items-center justify-center px-4">
             <SwipeDeck bookmarks={inbox} onFinished={handleFinished} />
           </div>
         ) : bookmarks.length > 0 ? (

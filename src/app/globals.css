@@ -15,12 +15,20 @@
 
 html,
 body {
+  height: 100%;
+  width: 100%;
   overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: var(--tg-theme-bg-color, #000);
   color: var(--tg-theme-text-color, #fff);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Ensure full height in Telegram iframe */
+#__next {
+  height: 100%;
+  width: 100%;
 }
 
 /* Скрываем скроллбар в архиве */
