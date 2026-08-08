@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 
 export const runtime = "nodejs";
+
+type MediaItem = {
+  type: string;
+  fileId?: string;
+  imageUrl?: string;
+  videoUrl?: string;
+  fileName?: string | null;
+};
 
 type BookmarkData = {
   userId: string;
@@ -28,6 +37,7 @@ type BookmarkData = {
   sourceChatUsername?: string | null;
   sourceChatTitle?: string | null;
   sourceUrl?: string | null;
+  mediaItems?: MediaItem[];
 };
 
 export async function POST(req: NextRequest) {
@@ -82,10 +92,6 @@ export async function POST(req: NextRequest) {
       readTimeMin: 1,
     };
 
-    if (message.media_group_id) {
-      data.mediaGroupId = message.media_group_id;
-    }
-
     if (urls.length > 0) {
       data.domain = new URL(urls[0]).hostname;
     }
@@ -96,7 +102,7 @@ export async function POST(req: NextRequest) {
     if (message.forward_from || message.forward_origin) {
       data.type = "forward";
       data.sourceType = "forward";
-      const source = parseForwardSource(message);
+      const source = await parseForwardSource(message);
       if (source) {
         data.sourceChatId = source.chatId;
         data.sourceMessageId = source.messageId;
@@ -105,50 +111,17 @@ export async function POST(req: NextRequest) {
         data.sourceUrl = source.url;
         if (source.url) data.forwardUrl = source.url;
       }
-      if (message.photo) {
-        data.fileId = message.photo[message.photo.length - 1].file_id;
-        const imageUrl = await resolveFileUrl(data.fileId, token);
-        if (imageUrl) data.imageUrl = imageUrl;
-      } else if (message.video || message.animation) {
-        const media = message.video || message.animation;
-        data.fileId = media.file_id;
-        fileName = message.animation?.file_name;
-        const [fileUrl, thumbUrl] = await Promise.all([
-          resolveFileUrl(media.file_id, token),
-          resolveFileUrl(media.thumb?.file_id, token),
-        ]);
-        if (message.video && fileUrl) data.videoUrl = fileUrl;
-        if (thumbUrl) data.imageUrl = thumbUrl;
-      } else if (message.document) {
-        data.fileId = message.document.file_id;
-        fileName = message.document.file_name;
-        const thumbUrl = await resolveFileUrl(message.document.thumb?.file_id, token);
-        if (thumbUrl) data.imageUrl = thumbUrl;
-      }
-    } else if (message.photo) {
-      data.type = "photo";
-      data.fileId = message.photo[message.photo.length - 1].file_id;
-      const imageUrl = await resolveFileUrl(data.fileId, token);
-      if (imageUrl) data.imageUrl = imageUrl;
-    } else if (message.video || message.animation) {
-      const media = message.video || message.animation;
-      data.type = message.animation ? "animation" : "video";
-      data.fileId = media.file_id;
-      fileName = message.animation?.file_name;
-      const [fileUrl, thumbUrl] = await Promise.all([
-        resolveFileUrl(media.file_id, token),
-        resolveFileUrl(media.thumb?.file_id, token),
-      ]);
-      if (message.video && fileUrl) data.videoUrl = fileUrl;
-      if (thumbUrl) data.imageUrl = thumbUrl;
-    } else if (message.document) {
-      data.type = "document";
-      data.fileId = message.document.file_id;
-      fileName = message.document.file_name;
-      const thumbUrl = await resolveFileUrl(message.document.thumb?.file_id, token);
-      if (thumbUrl) data.imageUrl = thumbUrl;
+    }
+
+    const mediaItem = await buildMediaItem(message, token);
+    if (mediaItem) {
+      data.fileId = mediaItem.fileId;
+      if (mediaItem.imageUrl) data.imageUrl = mediaItem.imageUrl;
+      if (mediaItem.videoUrl) data.videoUrl = mediaItem.videoUrl;
+      fileName = mediaItem.fileName || undefined;
+      if (data.type !== "forward") data.type = mediaItem.type;
     } else if (urls.length > 0) {
-      data.type = "link";
+      if (data.type !== "forward") data.type = "link";
       const preview = await fetchLinkPreview(urls[0]);
       if (preview?.imageUrl) data.imageUrl = preview.imageUrl;
       ogTitle = preview?.title;
@@ -158,6 +131,43 @@ export async function POST(req: NextRequest) {
     }
 
     data.title = deriveTitle({ caption, text, ogTitle, fileName, type: data.type });
+
+    if (mediaItem && message.media_group_id) {
+      data.mediaGroupId = message.media_group_id;
+      const docId = `album_${`tg:${fromId}`.replace(/[^\w-]/g, "_")}_${message.media_group_id}`;
+      const ref = adminDb.collection("bookmarks").doc(docId);
+      let isNew = false;
+
+      await adminDb.runTransaction(async (t) => {
+        const snap = await t.get(ref);
+        if (snap.exists) {
+          const existing = snap.data() as Record<string, unknown>;
+          const items = (existing.mediaItems as MediaItem[]) || [];
+          items.push(mediaItem);
+          const updates: Record<string, unknown> = { mediaItems: items };
+          if (caption && !existing.caption) {
+            updates.caption = caption;
+            updates.title = deriveTitle({
+              caption,
+              text,
+              ogTitle,
+              fileName,
+              type: typeof existing.type === "string" ? existing.type : "photo",
+            });
+          }
+          t.update(ref, updates);
+          return;
+        }
+        isNew = true;
+        data.mediaItems = [mediaItem];
+        t.set(ref, data);
+      });
+
+      if (isNew) {
+        await reply(`✅ Сохранено: ${data.title.slice(0, 30)}...`);
+      }
+      return NextResponse.json({ ok: true });
+    }
 
     await adminDb.collection("bookmarks").add(data);
     await reply(`✅ Сохранено: ${data.title.slice(0, 30)}...`);
@@ -286,11 +296,13 @@ type ForwardSource = {
   url: string | null;
 };
 
-function parseForwardSource(message: {
-  forward_origin?: ForwardOrigin;
-  forward_from_message_id?: number;
-  forward_from_chat?: ForwardChat;
-}): ForwardSource | null {
+async function parseForwardSource(
+  message: {
+    forward_origin?: ForwardOrigin;
+    forward_from_message_id?: number;
+    forward_from_chat?: ForwardChat;
+  }
+): Promise<ForwardSource | null> {
   const origin = message.forward_origin;
   const messageId = origin?.message_id || message.forward_from_message_id;
   const chat = origin?.chat || message.forward_from_chat;
@@ -299,9 +311,6 @@ function parseForwardSource(message: {
   let url: string | null = null;
   if (messageId && chat.username) {
     url = `https://t.me/${chat.username}/${messageId}`;
-  } else if (messageId && typeof chat.id === "number" && chat.id < 0) {
-    const stripped = String(chat.id).replace(/^-100/, "").replace(/^-/, "");
-    url = `https://t.me/c/${stripped}/${messageId}`;
   }
 
   return {
@@ -311,6 +320,70 @@ function parseForwardSource(message: {
     title: chat.title || null,
     url,
   };
+}
+
+type PhotoSize = { file_id: string };
+type VideoLike = {
+  file_id: string;
+  file_name?: string;
+  thumb?: { file_id?: string };
+};
+type DocumentLike = {
+  file_id: string;
+  file_name?: string;
+  thumb?: { file_id?: string };
+};
+
+type TelegramMessage = {
+  photo?: PhotoSize[];
+  video?: VideoLike;
+  animation?: VideoLike;
+  document?: DocumentLike;
+};
+
+async function buildMediaItem(
+  message: TelegramMessage,
+  token: string | undefined
+): Promise<MediaItem | null> {
+  if (message.photo) {
+    const fileId = message.photo[message.photo.length - 1].file_id;
+    const imageUrl = await resolveFileUrl(fileId, token);
+    if (!imageUrl) return null;
+    return { type: "photo", fileId, imageUrl };
+  }
+  const video = message.video;
+  const animation = message.animation;
+  if (video || animation) {
+    const media: VideoLike = (video || animation)!;
+    const fileId = media.file_id;
+    const [fileUrl, thumbUrl] = await Promise.all([
+      resolveFileUrl(fileId, token),
+      resolveFileUrl(media.thumb?.file_id, token),
+    ]);
+    const item: MediaItem = {
+      type: message.video ? "video" : "animation",
+      fileId,
+    };
+    if (message.video && fileUrl) item.videoUrl = fileUrl;
+    if (thumbUrl) item.imageUrl = thumbUrl;
+    if (message.animation?.file_name) item.fileName = message.animation.file_name;
+    return item;
+  }
+  if (message.document) {
+    const fileId = message.document.file_id;
+    const thumbUrl = await resolveFileUrl(
+      message.document.thumb?.file_id,
+      token
+    );
+    const item: MediaItem = {
+      type: "document",
+      fileId,
+      fileName: message.document.file_name || null,
+    };
+    if (thumbUrl) item.imageUrl = thumbUrl;
+    return item;
+  }
+  return null;
 }
 
 const TITLE_MAX_LENGTH = 120;

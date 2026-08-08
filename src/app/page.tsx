@@ -53,12 +53,13 @@ export default function Home() {
         body: JSON.stringify({
           cardId,
           action,
-          idempotencyKey: `${cardId}:${action}`,
+          idempotencyKey: `${cardId}:${action}:${crypto.randomUUID()}`,
         }),
       });
-      return res.ok;
+      if (!res.ok) return null;
+      return (await res.json()) as { status?: string } | null;
     } catch {
-      return false;
+      return null;
     }
   };
 
@@ -71,16 +72,22 @@ export default function Home() {
   };
 
   const handleSwipe = async (direction: SwipeDirection, bookmark: Bookmark) => {
-    setDeck((prev) => prev.filter((b) => b.id !== bookmark.id));
     if (direction === "left") {
+      setDeck((prev) => prev.filter((b) => b.id !== bookmark.id));
       setArchived((prev) => [...prev, bookmark]);
-      const ok = await postAction(bookmark.id, "left");
-      if (!ok) loadBookmarks();
+      const res = await postAction(bookmark.id, "left");
+      if (!res) loadBookmarks();
     } else if (direction === "up") {
       openBookmark(bookmark);
     } else {
-      const ok = await postAction(bookmark.id, "right");
-      if (!ok) loadBookmarks();
+      setDeck((prev) => prev.filter((b) => b.id !== bookmark.id));
+      const res = await postAction(bookmark.id, "right");
+      if (res?.status === "archived") {
+        setArchived((prev) => [...prev, bookmark]);
+      } else {
+        setDeck((prev) => [...prev, bookmark]);
+      }
+      if (!res) loadBookmarks();
     }
   };
 

@@ -20,6 +20,13 @@ export interface Bookmark {
   sourceType?: string;
   sourceUrl?: string | null;
   mediaGroupId?: string;
+  mediaItems?: Array<{
+    type: string;
+    fileId?: string;
+    imageUrl?: string;
+    videoUrl?: string;
+    fileName?: string | null;
+  }>;
   status?: string;
   deferUntil?: string | null;
   previousStatus?: string | null;
@@ -27,6 +34,7 @@ export interface Bookmark {
   domain?: string;
   swipedCount: number;
   readTimeMin: number;
+  rightCount?: number;
 }
 
 export async function GET(req: NextRequest) {

@@ -55,14 +55,19 @@ export async function POST(req: NextRequest) {
 
     let newStatus = currentStatus;
     let deferUntil: string | null = null;
+    let rightCount = typeof data.rightCount === "number" ? data.rightCount : 0;
 
     switch (action as Action) {
       case "left":
         newStatus = "archived";
         break;
       case "right":
-        newStatus = "later";
-        deferUntil = new Date(now + 24 * 60 * 60 * 1000).toISOString();
+        rightCount += 1;
+        if (rightCount >= 5) {
+          newStatus = "archived";
+        } else {
+          newStatus = "new";
+        }
         break;
       case "done":
         newStatus = "done";
@@ -76,11 +81,15 @@ export async function POST(req: NextRequest) {
     }
 
     if (action !== "open") {
-      await ref.update({
+      const update: Record<string, unknown> = {
         status: newStatus,
         deferUntil,
         previousStatus: action === "undo" ? null : currentStatus,
-      });
+      };
+      if (action === "right") {
+        update.rightCount = rightCount;
+      }
+      await ref.update(update);
     }
 
     await adminDb.collection("swipe_actions").add({
@@ -92,7 +101,11 @@ export async function POST(req: NextRequest) {
       createdAt: new Date(now).toISOString(),
     });
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({
+      ok: true,
+      status: newStatus,
+      rightCount: action === "right" ? rightCount : undefined,
+    });
   } catch (e) {
     console.error("Actions error:", e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
