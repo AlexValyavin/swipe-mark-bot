@@ -76,7 +76,7 @@ export function BookmarkCard({
       }}
     >
       {/* Media / Content Area */}
-      <div className="relative flex-1 w-full bg-neutral-800 min-h-0">
+      <div className="relative flex-1 w-full bg-neutral-800 min-h-[200px]">
         {bookmark.imageUrl ? (
           <img src={bookmark.imageUrl} alt="" className="h-full w-full object-cover" />
         ) : (

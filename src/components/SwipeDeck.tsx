@@ -29,7 +29,7 @@ export function SwipeDeck({
   };
 
   return (
-    <div className="relative flex-1 w-full max-w-[90vw] mx-auto">
+    <div className="relative flex h-full w-full max-w-[90vw] mx-auto">
       <AnimatePresence mode="popLayout">
         {bookmarks.length > 0 && index < bookmarks.length && (
           <motion.div
@@ -38,7 +38,7 @@ export function SwipeDeck({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95, x: 500 }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="relative flex h-full w-full"
+            className="relative h-full w-full"
           >
             <BookmarkCard
               bookmark={bookmarks[index]}
