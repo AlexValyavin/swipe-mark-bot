@@ -1,0 +1,100 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getAdminDb } from "@/lib/firebase-admin";
+import { getSessionUser } from "@/lib/session";
+
+export const runtime = "nodejs";
+
+const ACTIONS = ["left", "right", "done", "open", "undo"] as const;
+type Action = (typeof ACTIONS)[number];
+
+export async function POST(req: NextRequest) {
+  try {
+    const userId = getSessionUser(req);
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const {
+      cardId,
+      action,
+      idempotencyKey,
+    }: { cardId?: string; action?: string; idempotencyKey?: string } =
+      await req.json();
+
+    if (!cardId || !action || !ACTIONS.includes(action as Action)) {
+      return NextResponse.json({ error: "Bad request" }, { status: 400 });
+    }
+
+    const adminDb = getAdminDb();
+    const ref = adminDb.collection("bookmarks").doc(cardId);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const data = snap.data() as Record<string, unknown>;
+    if (data.userId !== userId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    if (idempotencyKey) {
+      const seen = await adminDb
+        .collection("swipe_actions")
+        .where("idempotencyKey", "==", idempotencyKey)
+        .limit(1)
+        .get();
+      if (!seen.empty) {
+        return NextResponse.json({ ok: true, alreadyProcessed: true });
+      }
+    }
+
+    const currentStatus = typeof data.status === "string" ? data.status : "new";
+    const previousStatus =
+      typeof data.previousStatus === "string" ? data.previousStatus : null;
+    const now = Date.now();
+
+    let newStatus = currentStatus;
+    let deferUntil: string | null = null;
+
+    switch (action as Action) {
+      case "left":
+        newStatus = "archived";
+        break;
+      case "right":
+        newStatus = "later";
+        deferUntil = new Date(now + 24 * 60 * 60 * 1000).toISOString();
+        break;
+      case "done":
+        newStatus = "done";
+        break;
+      case "open":
+        break;
+      case "undo":
+        newStatus = previousStatus || "new";
+        deferUntil = null;
+        break;
+    }
+
+    if (action !== "open") {
+      await ref.update({
+        status: newStatus,
+        deferUntil,
+        previousStatus: action === "undo" ? null : currentStatus,
+      });
+    }
+
+    await adminDb.collection("swipe_actions").add({
+      userId,
+      cardId,
+      action,
+      previousStatus: currentStatus,
+      idempotencyKey: idempotencyKey || null,
+      createdAt: new Date(now).toISOString(),
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error("Actions error:", e);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
+}

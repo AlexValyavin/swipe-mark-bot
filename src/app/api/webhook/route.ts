@@ -9,6 +9,7 @@ type BookmarkData = {
   title: string;
   url: string | null;
   type: string;
+  status: string;
   swipedCount: number;
   readTimeMin: number;
   domain?: string;
@@ -17,6 +18,8 @@ type BookmarkData = {
   videoUrl?: string;
   forwardUrl?: string;
   description?: string;
+  deferUntil?: string | null;
+  previousStatus?: string | null;
 };
 
 export async function POST(req: NextRequest) {
@@ -66,6 +69,7 @@ export async function POST(req: NextRequest) {
       title: content.slice(0, 200),
       url: urls[0] || null,
       type: "text",
+      status: "new",
       swipedCount: 0,
       readTimeMin: 1,
     };

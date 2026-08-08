@@ -22,6 +22,82 @@ export default function Home() {
   const user = twa?.initDataUnsafe?.user;
   const initData = twa?.initData;
 
+  const loadBookmarks = async () => {
+    const res = await fetch("/api/bookmarks");
+    const data = await res.json();
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    const now = Date.now();
+    const all: Bookmark[] = data.bookmarks || [];
+    setBookmarks(all);
+    setDeck(
+      all.filter((b) => {
+        const s = b.status || "new";
+        if (s === "new") return true;
+        if (s === "later" && b.deferUntil && new Date(b.deferUntil).getTime() <= now) {
+          return true;
+        }
+        return false;
+      })
+    );
+    setArchived(all.filter((b) => (b.status || "new") === "archived"));
+  };
+
+  const postAction = async (cardId: string, action: string) => {
+    try {
+      const res = await fetch("/api/actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cardId,
+          action,
+          idempotencyKey: `${cardId}:${action}`,
+        }),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  };
+
+  const openBookmark = (bookmark: Bookmark) => {
+    const target = getOpenTarget(bookmark);
+    if (target) {
+      window.open(target, "_blank", "noopener,noreferrer");
+    }
+    postAction(bookmark.id, "open");
+  };
+
+  const handleSwipe = async (direction: SwipeDirection, bookmark: Bookmark) => {
+    setDeck((prev) => prev.filter((b) => b.id !== bookmark.id));
+    if (direction === "left") {
+      setArchived((prev) => [...prev, bookmark]);
+      const ok = await postAction(bookmark.id, "left");
+      if (!ok) loadBookmarks();
+    } else if (direction === "up") {
+      openBookmark(bookmark);
+    } else {
+      const ok = await postAction(bookmark.id, "right");
+      if (!ok) loadBookmarks();
+    }
+  };
+
+  const returnToDeck = (bookmark: Bookmark) => {
+    setArchived((prev) => prev.filter((b) => b.id !== bookmark.id));
+    setDeck((prev) => [bookmark, ...prev]);
+    setTab("inbox");
+    postAction(bookmark.id, "undo");
+  };
+
+  const refresh = () => {
+    setLoading(true);
+    loadBookmarks()
+      .catch((e) => setError(e instanceof Error ? e.message : "Ошибка загрузки"))
+      .finally(() => setLoading(false));
+  };
+
   useEffect(() => {
     if (!initData || !user) {
       setLoading(false);
@@ -41,15 +117,7 @@ export default function Home() {
         if (!authRes.ok) {
           throw new Error("Авторизация не прошла");
         }
-
-        const res = await fetch("/api/bookmarks");
-        const data = await res.json();
-        if (data.error) {
-          setError(data.error);
-        } else {
-          setBookmarks(data.bookmarks || []);
-          setDeck(data.bookmarks || []);
-        }
+        await loadBookmarks();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Ошибка загрузки");
       } finally {
@@ -57,36 +125,6 @@ export default function Home() {
       }
     })();
   }, [initData, user?.id]);
-
-  const handleSwipe = (direction: SwipeDirection, bookmark: Bookmark) => {
-    setDeck((prev) => prev.filter((b) => b.id !== bookmark.id));
-    if (direction === "left") {
-      setArchived((prev) => [...prev, bookmark]);
-    } else if (direction === "up") {
-      const target = getOpenTarget(bookmark);
-      if (target) {
-        window.open(target, "_blank", "noopener,noreferrer");
-      }
-    }
-  };
-
-  const reset = () => {
-    setArchived([]);
-    setDeck(bookmarks);
-  };
-
-  const returnToDeck = (bookmark: Bookmark) => {
-    setArchived((prev) => prev.filter((b) => b.id !== bookmark.id));
-    setDeck((prev) => [bookmark, ...prev]);
-    setTab("inbox");
-  };
-
-  const openBookmark = (bookmark: Bookmark) => {
-    const target = getOpenTarget(bookmark);
-    if (target) {
-      window.open(target, "_blank", "noopener,noreferrer");
-    }
-  };
 
   if (!isMiniApp) {
     return (
@@ -186,7 +224,7 @@ export default function Home() {
       {tab === "inbox" &&
         (deck.length > 0 ? (
           <div className="flex-1 min-h-[400px] flex items-center justify-center px-4">
-            <SwipeDeck bookmarks={deck} onSwipe={handleSwipe} />
+            <SwipeDeck bookmarks={deck} onSwipe={handleSwipe} onOpen={openBookmark} />
           </div>
         ) : bookmarks.length > 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
@@ -196,10 +234,10 @@ export default function Home() {
               {archived.length} сохранений в архиве
             </p>
             <button
-              onClick={reset}
+              onClick={refresh}
               className="mt-2 rounded-full bg-neutral-800 px-6 py-2 text-sm text-neutral-300 hover:bg-neutral-700 transition-colors"
             >
-              Показать снова
+              Обновить
             </button>
           </div>
         ) : (

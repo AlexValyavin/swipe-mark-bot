@@ -4,15 +4,16 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { X, ExternalLink, Undo2 } from "lucide-react";
 import { BookmarkCard, type SwipeDirection } from "@/components/BookmarkCard";
-import { getOpenTarget } from "@/lib/openTarget";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 
 export function SwipeDeck({
   bookmarks,
   onSwipe,
+  onOpen,
 }: {
   bookmarks: Bookmark[];
   onSwipe: (direction: SwipeDirection, bookmark: Bookmark) => void;
+  onOpen: (bookmark: Bookmark) => void;
 }) {
   const [exitX, setExitX] = useState(500);
   const [exitY, setExitY] = useState(0);
@@ -25,13 +26,6 @@ export function SwipeDeck({
     setExitX(direction === "left" ? -500 : direction === "up" ? 0 : 500);
     setExitY(direction === "up" ? -300 : 0);
     onSwipe(direction, current);
-  };
-
-  const handleOpen = () => {
-    const target = getOpenTarget(current);
-    if (target) {
-      window.open(target, "_blank", "noopener,noreferrer");
-    }
   };
 
   return (
@@ -64,7 +58,7 @@ export function SwipeDeck({
               bookmark={current}
               interactive={true}
               onSwipe={handleSwipe}
-              onOpen={handleOpen}
+              onOpen={() => onOpen(current)}
             />
           </motion.div>
         </AnimatePresence>
@@ -93,7 +87,7 @@ export function SwipeDeck({
           <X className="size-6" />
         </button>
         <button
-          onClick={handleOpen}
+          onClick={() => onOpen(current)}
           aria-label="Открыть"
           title="Открыть"
           className="flex size-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg transition-transform active:scale-90"
