@@ -2,23 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useTelegram } from "@/components/TelegramProvider";
-
-type Bookmark = {
-  id: string;
-  url?: string | null;
-  title: string;
-  type?: string;
-  caption?: string;
-  fileId?: string;
-  createdAt: string;
-};
+import { SwipeDeck, type CardData } from "@/components/SwipeDeck";
 
 export default function Home() {
   const twa = useTelegram();
   const [userId, setUserId] = useState<string | null>(null);
-  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [allCards, setAllCards] = useState<CardData[]>([]);
+  const [archivedCards, setArchivedCards] = useState<CardData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<"inbox" | "archive">("inbox");
 
   const isMiniApp = !!twa;
   const user = twa?.initDataUnsafe?.user;
@@ -39,7 +32,7 @@ export default function Home() {
         if (data.error) {
           setError(data.error);
         } else {
-          setBookmarks(data.bookmarks || []);
+          setAllCards(data.bookmarks || []);
         }
         setLoading(false);
       })
@@ -48,6 +41,18 @@ export default function Home() {
         setLoading(false);
       });
   }, [initData, user?.id]);
+
+  const inboxCards = allCards.filter(
+    (c) => !archivedCards.find((a) => a.id === c.id)
+  );
+
+  const handleSwipe = (card: CardData, direction: "left" | "right" | "up") => {
+    if (direction === "right" || direction === "up") {
+      // Отправляем в архив
+      setArchivedCards((prev) => [...prev, card]);
+    }
+    // direction === "left" — просто пропускаем (удаляем из очереди)
+  };
 
   if (!isMiniApp) {
     return (
@@ -96,74 +101,82 @@ export default function Home() {
     );
   }
 
-  if (bookmarks.length === 0) {
-    return (
-      <div className="flex min-h-dvh flex-col items-center justify-center gap-3 p-6 text-center">
-        <div className="text-6xl">📭</div>
-        <h2 className="text-xl font-semibold">Нет сохранённых ссылок</h2>
-        <p className="text-sm text-neutral-400">
-          Отправь ссылку, фото или видео боту @SwipeMarkBot — они появятся
-          здесь.
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <main className="flex min-h-dvh flex-col p-4">
-      <header className="mb-4 flex items-center justify-between">
+    <main className="flex min-h-dvh flex-col">
+      {/* Шапка с табами */}
+      <header className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
         <h1 className="text-lg font-bold">SwipeMark</h1>
-        <span className="text-xs text-neutral-500">
-          {bookmarks.length} сохранений
-        </span>
+        <div className="flex gap-1 rounded-lg bg-neutral-900 p-1">
+          <button
+            onClick={() => setTab("inbox")}
+            className={`rounded-md px-3 py-1 text-sm transition-colors ${
+              tab === "inbox"
+                ? "bg-white text-black"
+                : "text-neutral-400"
+            }`}
+          >
+            Входящие
+          </button>
+          <button
+            onClick={() => setTab("archive")}
+            className={`rounded-md px-3 py-1 text-sm transition-colors ${
+              tab === "archive"
+                ? "bg-white text-black"
+                : "text-neutral-400"
+            }`}
+          >
+            Архив
+          </button>
+        </div>
       </header>
 
-      <div className="flex flex-1 flex-col gap-3">
-        {bookmarks.map((b) => (
-          <div
-            key={b.id}
-            className="block rounded-xl bg-neutral-900 p-4"
-          >
-            {b.type === "photo" || b.type === "video" ? (
-              <>
-                {b.caption && (
-                  <p className="text-sm font-medium">{b.caption}</p>
-                )}
-                {b.url ? (
+      {/* Inbox — свайп-дек */}
+      {tab === "inbox" &&
+        (inboxCards.length > 0 ? (
+          <SwipeDeck cards={inboxCards} onSwipe={handleSwipe} />
+        ) : allCards.length > 0 ? (
+          <div className="flex flex-1 items-center justify-center text-neutral-500">
+            Всё разобрано! 🎉
+          </div>
+        ) : (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+            <div className="text-6xl">📭</div>
+            <h2 className="text-xl font-semibold">Нет сохранений</h2>
+            <p className="text-sm text-neutral-400">
+              Отправь ссылку, фото или видео боту @SwipeMarkBot — они появятся
+              здесь.
+            </p>
+          </div>
+        ))}
+
+      {/* Archive — список */}
+      {tab === "archive" &&
+        (archivedCards.length > 0 ? (
+          <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-4">
+            {archivedCards.map((c) => (
+              <div key={c.id} className="rounded-xl bg-neutral-900 p-3">
+                <p className="text-sm font-medium line-clamp-2">{c.title}</p>
+                {c.url && (
                   <a
-                    href={b.url}
+                    href={c.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="mt-1 block truncate text-xs text-blue-400"
                   >
-                    {b.url}
+                    {c.url}
                   </a>
-                ) : (
-                  <p className="mt-1 text-xs text-neutral-500">
-                    {b.type === "photo" ? "📷 Фото" : "🎬 Видео"}
-                  </p>
                 )}
-              </>
-            ) : b.url ? (
-              <a
-                href={b.url}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <p className="text-sm font-medium">{b.title}</p>
-                <p className="mt-1 truncate text-xs text-neutral-500">
-                  {b.url}
+                <p className="mt-1 text-[10px] text-neutral-600">
+                  {new Date(c.createdAt).toLocaleString("ru")}
                 </p>
-              </a>
-            ) : (
-              <p className="text-sm text-neutral-300">{b.title}</p>
-            )}
-            <p className="mt-2 text-[10px] text-neutral-600">
-              {new Date(b.createdAt).toLocaleString("ru")}
-            </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-1 items-center justify-center text-neutral-500">
+            Архив пуст
           </div>
         ))}
-      </div>
     </main>
   );
 }
