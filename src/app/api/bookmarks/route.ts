@@ -13,6 +13,7 @@ export interface Bookmark {
   type?: string;
   caption?: string;
   fileId?: string;
+  videoUrl?: string;
   createdAt: string;
   domain?: string;
   swipedCount: number;

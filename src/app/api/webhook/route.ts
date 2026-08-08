@@ -14,6 +14,7 @@ type BookmarkData = {
   domain?: string;
   fileId?: string;
   imageUrl?: string;
+  videoUrl?: string;
   description?: string;
 };
 
@@ -80,9 +81,12 @@ export async function POST(req: NextRequest) {
     } else if (message.video) {
       data.type = "video";
       data.fileId = message.video.file_id;
-      const thumbId = message.video.thumb?.file_id || message.animation?.thumb?.file_id || message.document?.thumb?.file_id;
-      const imageUrl = await resolveFileUrl(thumbId, token);
-      if (imageUrl) data.imageUrl = imageUrl;
+      const [videoUrl, thumbUrl] = await Promise.all([
+        resolveFileUrl(message.video.file_id, token),
+        resolveFileUrl(message.video.thumb?.file_id || message.animation?.thumb?.file_id || message.document?.thumb?.file_id, token),
+      ]);
+      if (videoUrl) data.videoUrl = videoUrl;
+      if (thumbUrl) data.imageUrl = thumbUrl;
     } else if (message.forward_from || message.forward_origin) {
       data.type = "forward";
     } else if (urls.length > 0) {

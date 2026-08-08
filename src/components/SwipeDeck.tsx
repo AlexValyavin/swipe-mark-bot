@@ -25,8 +25,9 @@ export function SwipeDeck({
   };
 
   const handleOpen = () => {
-    if (current.url) {
-      window.open(current.url, "_blank", "noopener,noreferrer");
+    const target = current.videoUrl || current.url || current.imageUrl;
+    if (target) {
+      window.open(target, "_blank", "noopener,noreferrer");
     }
   };
 
