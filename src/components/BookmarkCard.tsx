@@ -6,8 +6,8 @@ import type { Bookmark } from "@/app/api/bookmarks/route";
 
 export type SwipeDirection = "left" | "right" | "up";
 
-const SWIPE_DISTANCE = 110;
-const SWIPE_VELOCITY = 500;
+const SWIPE_DISTANCE = 100;
+const SWIPE_VELOCITY = 300;
 
 function directionFrom(info: PanInfo): SwipeDirection | null {
   const { offset, velocity } = info;
@@ -30,27 +30,45 @@ export function BookmarkCard({
 }) {
   const dragged = useRef(false);
   const x = useMotionValue(0);
-  const rotate = useTransform(x, [-250, 250], [-10, 10]);
-  const archiveOpacity = useTransform(x, [-160, -40], [1, 0]);
-  const laterOpacity = useTransform(x, [40, 160], [0, 1]);
+  const y = useMotionValue(0);
+  const rotate = useTransform(x, [-200, 200], [-12, 12]);
+  const archiveOpacity = useTransform(x, [-150, -30], [1, 0]);
+  const laterOpacity = useTransform(x, [30, 150], [0, 1]);
 
   return (
-    <motion.article
-      className="absolute inset-0 flex flex-col overflow-hidden rounded-3xl bg-neutral-900 shadow-2xl select-none"
-      style={{ x, rotate: interactive ? rotate : 0 }}
-      drag={interactive ? "x" : false}
-      dragConstraints={{ left: 0, right: 0 }}
+    <motion.div
+      className="relative flex h-full w-full flex-col overflow-hidden rounded-2xl bg-neutral-900 shadow-2xl select-none"
+      style={{ x, y, rotate: interactive ? rotate : 0 }}
+      drag={interactive}
       dragMomentum={false}
+      dragElastic={0.2}
       onDragStart={() => { dragged.current = true; }}
       onDragEnd={async (_, info) => {
         const direction = directionFrom(info);
         if (!direction) {
-          animate(x, 0, { type: "spring", stiffness: 400, damping: 40 });
+          await Promise.all([
+            animate(x, 0, { type: "spring", stiffness: 400, damping: 40 }),
+            animate(y, 0, { type: "spring", stiffness: 400, damping: 40 }),
+          ]);
           return;
         }
-        await animate(x, direction === "right" ? 700 : -700, { duration: 0.2 });
+        if (direction === "up") {
+          await Promise.all([
+            animate(x, 0, { type: "spring", stiffness: 400, damping: 40 }),
+            animate(y, -300, { type: "spring", stiffness: 400, damping: 40 }),
+          ]);
+          onSwipe(direction);
+          x.set(0);
+          y.set(0);
+          return;
+        }
+        await Promise.all([
+          animate(x, direction === "right" ? 500 : -500, { duration: 0.2 }),
+          animate(y, info.offset.y * 1.2, { duration: 0.2 }),
+        ]);
         onSwipe(direction);
         x.set(0);
+        y.set(0);
       }}
       onClick={() => {
         if (!dragged.current) onOpen();
@@ -58,7 +76,7 @@ export function BookmarkCard({
       }}
     >
       {/* Media / Content Area */}
-      <div className="relative h-2/3 w-full bg-neutral-800">
+      <div className="relative flex-1 w-full bg-neutral-800 min-h-0">
         {bookmark.imageUrl ? (
           <img src={bookmark.imageUrl} alt="" className="h-full w-full object-cover" />
         ) : (
@@ -70,7 +88,7 @@ export function BookmarkCard({
       </div>
 
       {/* Info Area */}
-      <div className="flex flex-1 flex-col p-5">
+      <div className="flex-shrink-0 p-5">
         <h2 className="text-xl font-bold leading-snug text-white line-clamp-2">
           {bookmark.title || "Без заголовка"}
         </h2>
@@ -90,6 +108,6 @@ export function BookmarkCard({
           <motion.div style={{ opacity: laterOpacity }} className="absolute top-6 left-6 border-2 border-emerald-400 text-emerald-400 px-3 py-1 rounded-lg -rotate-12 font-black">ПОТОМ</motion.div>
         </>
       )}
-    </motion.article>
+    </motion.div>
   );
 }

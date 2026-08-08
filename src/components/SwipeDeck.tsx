@@ -29,7 +29,7 @@ export function SwipeDeck({
   };
 
   return (
-    <div className="relative flex flex-1 items-center justify-center">
+    <div className="relative flex-1 w-full max-w-[90vw] mx-auto">
       <AnimatePresence mode="popLayout">
         {bookmarks.length > 0 && index < bookmarks.length && (
           <motion.div
@@ -38,8 +38,7 @@ export function SwipeDeck({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95, x: 500 }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="absolute w-full max-w-md"
-            style={{ height: 520 }}
+            className="relative flex h-full w-full"
           >
             <BookmarkCard
               bookmark={bookmarks[index]}
@@ -52,21 +51,20 @@ export function SwipeDeck({
       </AnimatePresence>
 
       {/* Background stack for next cards */}
-      <div className="absolute w-full max-w-md" style={{ height: 520 }}>
+      <div className="absolute inset-0 pointer-events-none">
         {bookmarks.slice(index + 1, index + 3).map((_, i) => (
           <motion.div
             key={i}
-            className="absolute inset-0 rounded-3xl bg-neutral-900 shadow-xl"
+            className="absolute inset-0 rounded-2xl bg-neutral-900 shadow-xl"
             style={{
               zIndex: 5 - i,
-              scale: 1 - (i + 1) * 0.05,
-              y: (i + 1) * 10,
+              transform: `scale(${1 - (i + 1) * 0.04}) translateY(${(i + 1) * 6}px)`,
             }}
           />
         ))}
       </div>
 
-      {/* Progress */}
+      {/* Progress indicator */}
       <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-2">
         {bookmarks.map((_, i) => (
           <div
