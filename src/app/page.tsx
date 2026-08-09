@@ -17,10 +17,25 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"inbox" | "archive">("inbox");
+  const [archiveTtlHours, setArchiveTtlHours] = useState<number | null>(null);
 
   const isMiniApp = !!twa;
   const user = twa?.initDataUnsafe?.user;
   const initData = twa?.initData;
+
+  const loadSettings = async () => {
+    try {
+      const res = await fetch("/api/settings");
+      const data = await res.json();
+      if (data.archiveTtlHours !== undefined) {
+        setArchiveTtlHours(
+          typeof data.archiveTtlHours === "number" ? data.archiveTtlHours : null
+        );
+      }
+    } catch {
+      // настройки не критичны — молча пропускаем
+    }
+  };
 
   const loadBookmarks = async () => {
     const res = await fetch("/api/bookmarks");
@@ -98,6 +113,20 @@ export default function Home() {
     postAction(bookmark.id, "undo");
   };
 
+  const setTtl = (hours: number | null, cutoff: number | null) => {
+    setArchiveTtlHours(hours);
+    if (cutoff) {
+      setArchived((prev) =>
+        prev.filter((c) => new Date(c.createdAt).getTime() >= cutoff)
+      );
+    }
+    void fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ archiveTtlHours: hours }),
+    }).catch(() => {});
+  };
+
   const refresh = () => {
     setLoading(true);
     loadBookmarks()
@@ -124,7 +153,7 @@ export default function Home() {
         if (!authRes.ok) {
           throw new Error("Авторизация не прошла");
         }
-        await loadBookmarks();
+        await Promise.all([loadSettings(), loadBookmarks()]);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Ошибка загрузки");
       } finally {
@@ -194,7 +223,7 @@ export default function Home() {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col">
+    <div className="mx-auto flex h-dvh w-full max-w-md flex-col">
       <header className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
         <h1 className="text-lg font-bold tracking-tight">
           Swipe<span className="text-indigo-400">Mark</span>
@@ -202,13 +231,18 @@ export default function Home() {
         <div className="flex gap-1 rounded-lg bg-neutral-900 p-1">
           <button
             onClick={() => setTab("inbox")}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               tab === "inbox"
                 ? "bg-white text-black shadow-sm"
                 : "text-neutral-400 hover:text-white"
             }`}
           >
             Входящие
+            {deck.length > 0 && (
+              <span className="rounded-full bg-indigo-500 px-1.5 py-0.5 text-[10px] text-white">
+                {deck.length}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setTab("archive")}
@@ -230,7 +264,7 @@ export default function Home() {
 
       {tab === "inbox" &&
         (deck.length > 0 ? (
-          <div className="flex-1 min-h-[400px] flex items-center justify-center px-4">
+          <div className="flex flex-1 min-h-0 items-center justify-center px-4">
             <SwipeDeck bookmarks={deck} onSwipe={handleSwipe} onOpen={openBookmark} />
           </div>
         ) : bookmarks.length > 0 ? (
@@ -259,68 +293,92 @@ export default function Home() {
           </div>
         ))}
 
-      {tab === "archive" &&
-        (archived.length > 0 ? (
-          <div className="flex flex-1 flex-col gap-1 overflow-y-auto p-4 hide-scrollbar">
-            {archived.map((c) => (
-              <div
-                key={c.id}
-                className="group rounded-xl bg-neutral-900 p-4 transition-colors hover:bg-neutral-800"
+      {tab === "archive" && (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex items-center gap-1.5 px-5 py-3">
+            <span className="text-xs text-neutral-500">Очистка архива:</span>
+            {[
+              { label: "24ч", hours: 24 },
+              { label: "7д", hours: 168 },
+              { label: "30д", hours: 720 },
+              { label: "Выкл", hours: null },
+            ].map((opt) => (
+              <button
+                key={String(opt.hours)}
+                onClick={() => setTtl(opt.hours, opt.hours ? Date.now() - opt.hours * 60 * 60 * 1000 : null)}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  archiveTtlHours === opt.hours
+                    ? "bg-indigo-600 text-white"
+                    : "bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
+                }`}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium line-clamp-2">{c.title}</p>
-                    {c.url && (
-                      <a
-                        href={c.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-1 block truncate text-xs text-indigo-400 hover:underline"
-                      >
-                        {c.url}
-                      </a>
-                    )}
-                  </div>
-                  <div className="flex flex-shrink-0 items-center gap-1.5 self-start">
-                    <span className="rounded-md bg-neutral-800 px-2 py-1 text-[10px] text-neutral-500">
-                      {c.type === "photo" ? "📷" : c.type === "video" ? "🎬" : c.type === "text" ? "📝" : c.type === "forward" ? "📨" : "🔗"}
-                    </span>
-                    <button
-                      onClick={() => returnToDeck(c)}
-                      aria-label="Вернуть в стопку"
-                      title="Вернуть в стопку"
-                      className="flex size-8 items-center justify-center rounded-full bg-neutral-800 text-neutral-300 transition-colors hover:bg-neutral-700"
-                    >
-                      <Undo2 className="size-4" />
-                    </button>
-                    <button
-                      onClick={() => openBookmark(c)}
-                      aria-label="Открыть"
-                      title="Открыть"
-                      className="flex size-8 items-center justify-center rounded-full bg-neutral-800 text-indigo-400 transition-colors hover:bg-neutral-700"
-                    >
-                      <ExternalLink className="size-4" />
-                    </button>
-                  </div>
-                </div>
-                <p className="mt-2 text-[10px] text-neutral-600">
-                  {new Date(c.createdAt).toLocaleString("ru", {
-                    day: "numeric",
-                    month: "long",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </p>
-              </div>
+                {opt.label}
+              </button>
             ))}
           </div>
-        ) : (
-          <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-            <div className="text-5xl">🗂️</div>
-            <p className="text-neutral-400">Архив пуст</p>
-            <p className="text-sm text-neutral-500">Свайпни влево, чтобы отправить в архив</p>
-          </div>
-        ))}
+          {archived.length > 0 ? (
+            <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-4 hide-scrollbar">
+              {archived.map((c) => (
+                <div
+                  key={c.id}
+                  className="group rounded-xl bg-neutral-900 p-4 transition-colors hover:bg-neutral-800"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium line-clamp-2">{c.title}</p>
+                      {c.url && (
+                        <a
+                          href={c.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-1 block truncate text-xs text-indigo-400 hover:underline"
+                        >
+                          {c.url}
+                        </a>
+                      )}
+                    </div>
+                    <div className="flex flex-shrink-0 items-center gap-1.5 self-start">
+                      <span className="rounded-md bg-neutral-800 px-2 py-1 text-[10px] text-neutral-500">
+                        {c.type === "photo" ? "📷" : c.type === "video" ? "🎬" : c.type === "text" ? "📝" : c.type === "forward" ? "📨" : "🔗"}
+                      </span>
+                      <button
+                        onClick={() => returnToDeck(c)}
+                        aria-label="Вернуть в стопку"
+                        title="Вернуть в стопку"
+                        className="flex size-8 items-center justify-center rounded-full bg-neutral-800 text-neutral-300 transition-colors hover:bg-neutral-700"
+                      >
+                        <Undo2 className="size-4" />
+                      </button>
+                      <button
+                        onClick={() => openBookmark(c)}
+                        aria-label="Открыть"
+                        title="Открыть"
+                        className="flex size-8 items-center justify-center rounded-full bg-neutral-800 text-indigo-400 transition-colors hover:bg-neutral-700"
+                      >
+                        <ExternalLink className="size-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-[10px] text-neutral-600">
+                    {new Date(c.createdAt).toLocaleString("ru", {
+                      day: "numeric",
+                      month: "long",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+              <div className="text-5xl">🗂️</div>
+              <p className="text-neutral-400">Архив пуст</p>
+              <p className="text-sm text-neutral-500">Свайпни влево, чтобы отправить в архив</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

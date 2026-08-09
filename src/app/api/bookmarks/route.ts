@@ -51,11 +51,33 @@ export async function GET(req: NextRequest) {
       .where("userId", "==", userId)
       .get();
 
-    const bookmarks = snapshot.docs
-      .map((doc) => {
-        const data = doc.data() as Omit<Bookmark, "id">;
-        return { id: doc.id, ...data };
-      })
+    const settingsSnap = await adminDb.collection("settings").doc(userId).get();
+    const settings = settingsSnap.exists
+      ? (settingsSnap.data() as { archiveTtlHours?: number })
+      : {};
+    const ttlHours =
+      typeof settings.archiveTtlHours === "number" ? settings.archiveTtlHours : null;
+
+    const cutoff = ttlHours ? Date.now() - ttlHours * 60 * 60 * 1000 : null;
+
+    const bookmarks: Bookmark[] = [];
+
+    for (const doc of snapshot.docs) {
+      const data = doc.data() as Omit<Bookmark, "id">;
+      const createdAt = new Date(data.createdAt || 0).getTime();
+      if (
+        cutoff &&
+        data.status === "archived" &&
+        createdAt &&
+        createdAt < cutoff
+      ) {
+        await doc.ref.delete();
+        continue;
+      }
+      bookmarks.push({ id: doc.id, ...data });
+    }
+
+    const result = bookmarks
       .sort(
         (a, b) =>
           new Date(b.createdAt || 0).getTime() -
@@ -63,7 +85,7 @@ export async function GET(req: NextRequest) {
       )
       .slice(0, 50);
 
-    return NextResponse.json({ bookmarks });
+    return NextResponse.json({ bookmarks: result });
   } catch (e) {
     console.error("Bookmarks error:", e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
