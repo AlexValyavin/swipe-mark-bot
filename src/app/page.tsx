@@ -127,6 +127,24 @@ export default function Home() {
     }).catch(() => {});
   };
 
+  const clearArchive = async () => {
+    if (
+      !window.confirm("Удалить все карточки из архива? Это действие необратимо.")
+    ) {
+      return;
+    }
+    try {
+      const res = await fetch("/api/bookmarks", { method: "DELETE" });
+      if (!res.ok) return;
+      setArchived([]);
+      setBookmarks((prev) =>
+        prev.filter((b) => (b.status || "new") !== "archived")
+      );
+    } catch {
+      // молча игнорируем сетевые ошибки
+    }
+  };
+
   const refresh = () => {
     setLoading(true);
     loadBookmarks()
@@ -315,6 +333,17 @@ export default function Home() {
                 {opt.label}
               </button>
             ))}
+            <button
+              onClick={clearArchive}
+              disabled={archived.length === 0}
+              className={`ml-auto rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                archived.length === 0
+                  ? "cursor-not-allowed bg-neutral-900 text-neutral-600"
+                  : "bg-red-600/20 text-red-400 hover:bg-red-600/30"
+              }`}
+            >
+              Очистить
+            </button>
           </div>
           {archived.length > 0 ? (
             <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-4 hide-scrollbar">

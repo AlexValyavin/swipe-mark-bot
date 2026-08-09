@@ -91,3 +91,33 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const userId = getSessionUser(req);
+
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const adminDb = getAdminDb();
+    const snapshot = await adminDb
+      .collection("bookmarks")
+      .where("userId", "==", userId)
+      .get();
+
+    let deleted = 0;
+    for (const doc of snapshot.docs) {
+      const data = doc.data() as Record<string, unknown>;
+      if (data.status === "archived") {
+        await doc.ref.delete();
+        deleted++;
+      }
+    }
+
+    return NextResponse.json({ ok: true, deleted });
+  } catch (e) {
+    console.error("Bookmarks delete error:", e);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
+}

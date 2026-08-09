@@ -284,8 +284,12 @@ type ForwardChat = {
 };
 
 type ForwardOrigin = {
+  type?: string;
   message_id?: number;
   chat?: ForwardChat;
+  sender_chat?: ForwardChat;
+  sender_user?: { id?: number; username?: string; first_name?: string };
+  sender_user_name?: string;
 };
 
 type ForwardSource = {
@@ -296,6 +300,21 @@ type ForwardSource = {
   url: string | null;
 };
 
+function buildForwardUrl(
+  chat: ForwardChat | undefined,
+  messageId: number | null
+): string | null {
+  if (!messageId || !chat) return null;
+  if (chat.username) {
+    return `https://t.me/${chat.username}/${messageId}`;
+  }
+  if (chat.id && (chat.type === "channel" || chat.type === "supergroup")) {
+    const id = String(chat.id).replace(/^-?100/, "");
+    return `https://t.me/c/${id}/${messageId}`;
+  }
+  return null;
+}
+
 async function parseForwardSource(
   message: {
     forward_origin?: ForwardOrigin;
@@ -304,21 +323,33 @@ async function parseForwardSource(
   }
 ): Promise<ForwardSource | null> {
   const origin = message.forward_origin;
-  const messageId = origin?.message_id || message.forward_from_message_id;
-  const chat = origin?.chat || message.forward_from_chat;
-  if (!chat) return null;
+  if (!origin && !message.forward_from_chat) return null;
 
-  let url: string | null = null;
-  if (messageId && chat.username) {
-    url = `https://t.me/${chat.username}/${messageId}`;
-  }
+  const type = origin?.type;
+  const messageId = origin?.message_id ?? message.forward_from_message_id ?? null;
+  const chat =
+    type === "channel"
+      ? origin?.chat
+      : type === "chat"
+      ? origin?.sender_chat
+      : message.forward_from_chat;
 
   return {
-    chatId: chat.id != null ? String(chat.id) : null,
+    chatId:
+      chat?.id != null
+        ? String(chat.id)
+        : origin?.sender_user?.id != null
+        ? String(origin.sender_user.id)
+        : null,
     messageId: messageId != null ? String(messageId) : null,
-    username: chat.username || null,
-    title: chat.title || null,
-    url,
+    username:
+      chat?.username ?? origin?.sender_user?.username ?? null,
+    title:
+      chat?.title ??
+      origin?.sender_user?.first_name ??
+      origin?.sender_user_name ??
+      null,
+    url: buildForwardUrl(chat, messageId),
   };
 }
 
