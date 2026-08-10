@@ -4,7 +4,7 @@ import { getSessionUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
-const ACTIONS = ["left", "right", "done", "open", "undo"] as const;
+const ACTIONS = ["left", "right", "done", "open", "undo", "later"] as const;
 type Action = (typeof ACTIONS)[number];
 
 export async function POST(req: NextRequest) {
@@ -77,6 +77,10 @@ export async function POST(req: NextRequest) {
       case "undo":
         newStatus = previousStatus || "new";
         deferUntil = null;
+        break;
+      case "later":
+        newStatus = "later";
+        deferUntil = new Date(now + 24 * 60 * 60 * 1000).toISOString();
         break;
     }
 

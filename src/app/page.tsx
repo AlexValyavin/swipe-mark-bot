@@ -1,23 +1,73 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Undo2, ExternalLink } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Inbox,
+  Archive,
+  RefreshCw,
+  Undo2,
+  ExternalLink,
+  Clock,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useTelegram } from "@/components/TelegramProvider";
 import { SwipeDeck } from "@/components/SwipeDeck";
 import type { SwipeDirection } from "@/components/BookmarkCard";
 import { getOpenTarget } from "@/lib/openTarget";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 
+type Tab = "inbox" | "archive";
+
+function groupByDay(list: Bookmark[]) {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfYesterday = startOfToday - 86400000;
+  const groups: { label: string; items: Bookmark[] }[] = [];
+  const today: Bookmark[] = [];
+  const yesterday: Bookmark[] = [];
+  const older: Bookmark[] = [];
+  for (const b of list) {
+    const t = new Date(b.createdAt || 0).getTime();
+    if (t >= startOfToday) today.push(b);
+    else if (t >= startOfYesterday) yesterday.push(b);
+    else older.push(b);
+  }
+  if (today.length) groups.push({ label: "Сегодня", items: today });
+  if (yesterday.length) groups.push({ label: "Вчера", items: yesterday });
+  if (older.length) groups.push({ label: "Ранее", items: older });
+  return groups;
+}
+
+function typeEmoji(c: Bookmark): string {
+  if (c.type === "photo") return "📷";
+  if (c.type === "video") return "🎬";
+  if (c.type === "text") return "📝";
+  if (c.type === "forward") return "📨";
+  return "🔗";
+}
+
+function thumbFor(c: Bookmark): string | null {
+  return c.imageUrl || c.mediaItems?.[0]?.imageUrl || null;
+}
+
 export default function Home() {
-  const twa = useTelegram();
+  const telegram = useTelegram();
+  const twa = telegram?.app ?? null;
   const [userId, setUserId] = useState<string | null>(null);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [deck, setDeck] = useState<Bookmark[]>([]);
   const [archived, setArchived] = useState<Bookmark[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"inbox" | "archive">("inbox");
+  const [tab, setTab] = useState<Tab>("inbox");
   const [archiveTtlHours, setArchiveTtlHours] = useState<number | null>(null);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [hintDismissed, setHintDismissed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("swipe-hint-seen") === "1";
+  });
 
   const isMiniApp = !!twa;
   const user = twa?.initDataUnsafe?.user;
@@ -88,13 +138,16 @@ export default function Home() {
 
   const handleSwipe = async (direction: SwipeDirection, bookmark: Bookmark) => {
     if (direction === "left") {
+      telegram?.haptic.impact("medium");
       setDeck((prev) => prev.filter((b) => b.id !== bookmark.id));
       setArchived((prev) => [...prev, bookmark]);
       const res = await postAction(bookmark.id, "left");
       if (!res) loadBookmarks();
     } else if (direction === "up") {
+      telegram?.haptic.impact("heavy");
       openBookmark(bookmark);
     } else {
+      telegram?.haptic.impact("light");
       setDeck((prev) => prev.filter((b) => b.id !== bookmark.id));
       const res = await postAction(bookmark.id, "right");
       if (res?.status === "archived") {
@@ -107,13 +160,21 @@ export default function Home() {
   };
 
   const returnToDeck = (bookmark: Bookmark) => {
+    telegram?.haptic.selection();
     setArchived((prev) => prev.filter((b) => b.id !== bookmark.id));
     setDeck((prev) => [bookmark, ...prev]);
     setTab("inbox");
     postAction(bookmark.id, "undo");
   };
 
+  const postponeFromArchive = (bookmark: Bookmark) => {
+    telegram?.haptic.selection();
+    setArchived((prev) => prev.filter((b) => b.id !== bookmark.id));
+    postAction(bookmark.id, "later");
+  };
+
   const setTtl = (hours: number | null, cutoff: number | null) => {
+    telegram?.haptic.selection();
     setArchiveTtlHours(hours);
     if (cutoff) {
       setArchived((prev) =>
@@ -128,11 +189,8 @@ export default function Home() {
   };
 
   const clearArchive = async () => {
-    if (
-      !window.confirm("Удалить все карточки из архива? Это действие необратимо.")
-    ) {
-      return;
-    }
+    setClearConfirmOpen(false);
+    telegram?.haptic.notification("success");
     try {
       const res = await fetch("/api/bookmarks", { method: "DELETE" });
       if (!res.ok) return;
@@ -143,6 +201,11 @@ export default function Home() {
     } catch {
       // молча игнорируем сетевые ошибки
     }
+  };
+
+  const dismissHint = () => {
+    setHintDismissed(true);
+    localStorage.setItem("swipe-hint-seen", "1");
   };
 
   const refresh = () => {
@@ -188,9 +251,9 @@ export default function Home() {
         </div>
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
-            Swipe<span className="text-indigo-400">Mark</span>
+            Swipe<span className="text-accent">Mark</span>
           </h1>
-          <p className="mt-2 text-sm text-neutral-400">
+          <p className="mt-2 text-sm text-muted">
             Сохраняй ссылки и разбирай бэклог свайпами
           </p>
         </div>
@@ -209,8 +272,8 @@ export default function Home() {
     return (
       <div className="flex min-h-dvh items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="size-8 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
-          <p className="text-sm text-neutral-500">Загрузка...</p>
+          <div className="size-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+          <p className="text-sm text-muted">Загрузка...</p>
         </div>
       </div>
     );
@@ -223,7 +286,7 @@ export default function Home() {
         <p className="text-sm text-red-400">Ошибка: {error}</p>
         <button
           onClick={() => window.location.reload()}
-          className="rounded-full bg-neutral-800 px-6 py-2 text-sm"
+          className="rounded-full bg-surface px-6 py-2 text-sm"
         >
           Попробовать снова
         </button>
@@ -235,179 +298,331 @@ export default function Home() {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-4 p-8 text-center">
         <div className="text-5xl">🔐</div>
-        <p className="text-sm text-neutral-400">Не удалось получить данные авторизации.</p>
+        <p className="text-sm text-muted">Не удалось получить данные авторизации.</p>
       </div>
     );
   }
 
+  const showHint = tab === "inbox" && deck.length > 0 && !hintDismissed;
+  const groups = groupByDay(archived);
+
   return (
-    <div className="mx-auto flex h-dvh w-full max-w-md flex-col">
-      <header className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
-        <h1 className="text-lg font-bold tracking-tight">
-          Swipe<span className="text-indigo-400">Mark</span>
-        </h1>
-        <div className="flex gap-1 rounded-lg bg-neutral-900 p-1">
-          <button
-            onClick={() => setTab("inbox")}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              tab === "inbox"
-                ? "bg-white text-black shadow-sm"
-                : "text-neutral-400 hover:text-white"
-            }`}
-          >
-            Входящие
+    <div className="mx-auto flex h-dvh w-full max-w-md flex-col bg-bg">
+      {/* Header */}
+      <header className="flex items-center justify-between px-5 py-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-lg text-white shadow-lg">
+            ⚡
+          </div>
+        </div>
+        <button
+          onClick={refresh}
+          aria-label="Обновить"
+          title="Обновить"
+          className="flex size-9 items-center justify-center rounded-full bg-surface text-muted transition-colors hover:text-text active:scale-90"
+        >
+          <RefreshCw className="size-4" />
+        </button>
+      </header>
+
+      {/* Content */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <AnimatePresence mode="wait">
+          {tab === "inbox" ? (
+            <motion.div
+              key="inbox"
+              initial={{ opacity: 0, x: -16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -16 }}
+              transition={{ duration: 0.18 }}
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              {showHint && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mx-5 mb-2 flex items-center gap-2 rounded-xl bg-surface px-4 py-2.5"
+                >
+                  <span className="text-lg">👆</span>
+                  <p className="flex-1 text-xs text-muted">
+                    Влево — в архив · Вправо — позже · Вверх — открыть
+                  </p>
+                  <button
+                    onClick={dismissHint}
+                    aria-label="Скрыть подсказку"
+                    className="flex size-6 items-center justify-center rounded-full text-muted active:scale-90"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </motion.div>
+              )}
+
+              {deck.length > 0 ? (
+                <div className="flex flex-1 min-h-0 items-center justify-center px-4 pb-2">
+                  <SwipeDeck bookmarks={deck} onSwipe={handleSwipe} onOpen={openBookmark} />
+                </div>
+              ) : bookmarks.length > 0 ? (
+                <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+                  <motion.div
+                    initial={{ scale: 0.7, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                    className="text-6xl"
+                  >
+                    🎉
+                  </motion.div>
+                  <p className="text-lg font-medium text-text">Всё разобрано!</p>
+                  <p className="text-sm text-muted">
+                    {archived.length} сохранений в архиве
+                  </p>
+                  <button
+                    onClick={refresh}
+                    className="mt-2 inline-flex items-center gap-2 rounded-full bg-surface px-6 py-2 text-sm text-text hover:bg-line transition-colors"
+                  >
+                    <RefreshCw className="size-3.5" />
+                    Обновить
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+                  <div className="flex size-20 items-center justify-center rounded-2xl bg-surface text-4xl">
+                    📭
+                  </div>
+                  <h2 className="text-xl font-semibold text-text">Нет сохранений</h2>
+                  <p className="max-w-xs text-sm text-muted">
+                    Отправь ссылку, фото или видео боту @SwipeMarkBot — они появятся здесь.
+                  </p>
+                </div>
+              )}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="archive"
+              initial={{ opacity: 0, x: 16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 16 }}
+              transition={{ duration: 0.18 }}
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              <div className="flex items-center gap-1.5 px-5 py-2">
+                <span className="text-xs text-muted">Очистка архива:</span>
+                {[
+                  { label: "24ч", hours: 24 },
+                  { label: "7д", hours: 168 },
+                  { label: "30д", hours: 720 },
+                  { label: "Выкл", hours: null },
+                ].map((opt) => (
+                  <button
+                    key={String(opt.hours)}
+                    onClick={() =>
+                      setTtl(opt.hours, opt.hours ? Date.now() - opt.hours * 60 * 60 * 1000 : null)
+                    }
+                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                      archiveTtlHours === opt.hours
+                        ? "bg-accent text-accent-text"
+                        : "bg-surface text-muted hover:text-text"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+                <button
+                  onClick={() => {
+                    telegram?.haptic.impact("medium");
+                    setClearConfirmOpen(true);
+                  }}
+                  disabled={archived.length === 0}
+                  className={`ml-auto inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    archived.length === 0
+                      ? "cursor-not-allowed bg-surface text-muted/40"
+                      : "bg-red-600/20 text-red-400 hover:bg-red-600/30"
+                  }`}
+                >
+                  <Trash2 className="size-3" />
+                  Очистить
+                </button>
+              </div>
+
+              {archived.length > 0 ? (
+                <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4 hide-scrollbar">
+                  {groups.map((g) => (
+                    <div key={g.label}>
+                      <h3 className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                        {g.label}
+                      </h3>
+                      <div className="flex flex-col gap-1">
+                        {g.items.map((c) => (
+                          <div
+                            key={c.id}
+                            className="group flex items-center gap-3 rounded-xl bg-surface p-3 transition-colors hover:bg-line"
+                          >
+                            {thumbFor(c) ? (
+                              <img
+                                src={thumbFor(c) as string}
+                                alt=""
+                                className="size-12 flex-shrink-0 rounded-lg object-cover"
+                              />
+                            ) : (
+                              <div className="flex size-12 flex-shrink-0 items-center justify-center rounded-lg bg-bg text-xl">
+                                {typeEmoji(c)}
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-text">
+                                {c.title}
+                              </p>
+                              <p className="mt-0.5 text-[11px] text-muted">
+                                {new Date(c.createdAt).toLocaleString("ru", {
+                                  day: "numeric",
+                                  month: "short",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </p>
+                            </div>
+                            <div className="flex flex-shrink-0 items-center gap-1">
+                              <button
+                                onClick={() => postponeFromArchive(c)}
+                                aria-label="Позже"
+                                title="Позже"
+                                className="flex size-8 items-center justify-center rounded-full bg-surface text-success transition-colors hover:bg-line active:scale-90"
+                              >
+                                <Clock className="size-4" />
+                              </button>
+                              <button
+                                onClick={() => returnToDeck(c)}
+                                aria-label="Вернуть в стопку"
+                                title="Вернуть в стопку"
+                                className="flex size-8 items-center justify-center rounded-full bg-surface text-muted transition-colors hover:bg-line active:scale-90"
+                              >
+                                <Undo2 className="size-4" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  telegram?.haptic.impact("medium");
+                                  openBookmark(c);
+                                }}
+                                aria-label="Открыть"
+                                title="Открыть"
+                                className="flex size-8 items-center justify-center rounded-full bg-accent/15 text-accent transition-colors hover:bg-accent/25 active:scale-90"
+                              >
+                                <ExternalLink className="size-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+                  <motion.div
+                    initial={{ scale: 0.7, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                    className="text-5xl"
+                  >
+                    🗂️
+                  </motion.div>
+                  <p className="text-text">Архив пуст</p>
+                  <p className="text-sm text-muted">Свайпни влево, чтобы отправить в архив</p>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Bottom navigation */}
+      <nav className="flex items-center justify-around border-t border-line bg-surface/50 px-6 py-2.5">
+        <button
+          onClick={() => {
+            telegram?.haptic.selection();
+            setTab("inbox");
+          }}
+          className={`relative flex flex-col items-center gap-0.5 px-6 py-1 transition-colors ${
+            tab === "inbox" ? "text-accent" : "text-muted"
+          }`}
+        >
+          <div className="relative">
+            <Inbox className="size-6" />
             {deck.length > 0 && (
-              <span className="rounded-full bg-indigo-500 px-1.5 py-0.5 text-[10px] text-white">
+              <span className="absolute -right-3 -top-1.5 flex min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-accent-text">
                 {deck.length}
               </span>
             )}
-          </button>
-          <button
-            onClick={() => setTab("archive")}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              tab === "archive"
-                ? "bg-white text-black shadow-sm"
-                : "text-neutral-400 hover:text-white"
-            }`}
-          >
-            Архив
+          </div>
+          <span className="text-[10px] font-medium">Входящие</span>
+        </button>
+        <button
+          onClick={() => {
+            telegram?.haptic.selection();
+            setTab("archive");
+          }}
+          className={`relative flex flex-col items-center gap-0.5 px-6 py-1 transition-colors ${
+            tab === "archive" ? "text-accent" : "text-muted"
+          }`}
+        >
+          <div className="relative">
+            <Archive className="size-6" />
             {archived.length > 0 && (
-              <span className="ml-1.5 rounded-full bg-indigo-500 px-1.5 py-0.5 text-[10px] text-white">
+              <span className="absolute -right-3 -top-1.5 flex min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-accent-text">
                 {archived.length}
               </span>
             )}
-          </button>
-        </div>
-      </header>
+          </div>
+          <span className="text-[10px] font-medium">Архив</span>
+        </button>
+      </nav>
 
-      {tab === "inbox" &&
-        (deck.length > 0 ? (
-          <div className="flex flex-1 min-h-0 items-center justify-center px-4">
-            <SwipeDeck bookmarks={deck} onSwipe={handleSwipe} onOpen={openBookmark} />
-          </div>
-        ) : bookmarks.length > 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-            <div className="text-6xl">🎉</div>
-            <p className="text-lg font-medium text-neutral-300">Всё разобрано!</p>
-            <p className="text-sm text-neutral-500">
-              {archived.length} сохранений в архиве
-            </p>
-            <button
-              onClick={refresh}
-              className="mt-2 rounded-full bg-neutral-800 px-6 py-2 text-sm text-neutral-300 hover:bg-neutral-700 transition-colors"
+      {/* Clear archive confirm modal */}
+      <AnimatePresence>
+        {clearConfirmOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center"
+            onClick={() => setClearConfirmOpen(false)}
+          >
+            <motion.div
+              initial={{ y: 60, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 60, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="w-full max-w-sm rounded-t-3xl border border-line bg-surface p-6 sm:rounded-3xl"
+              onClick={(e) => e.stopPropagation()}
             >
-              Обновить
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-            <div className="flex size-20 items-center justify-center rounded-2xl bg-neutral-900 text-4xl">
-              📭
-            </div>
-            <h2 className="text-xl font-semibold">Нет сохранений</h2>
-            <p className="text-sm text-neutral-400 max-w-xs">
-              Отправь ссылку, фото или видео боту @SwipeMarkBot — они появятся здесь.
-            </p>
-          </div>
-        ))}
-
-      {tab === "archive" && (
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex items-center gap-1.5 px-5 py-3">
-            <span className="text-xs text-neutral-500">Очистка архива:</span>
-            {[
-              { label: "24ч", hours: 24 },
-              { label: "7д", hours: 168 },
-              { label: "30д", hours: 720 },
-              { label: "Выкл", hours: null },
-            ].map((opt) => (
-              <button
-                key={String(opt.hours)}
-                onClick={() => setTtl(opt.hours, opt.hours ? Date.now() - opt.hours * 60 * 60 * 1000 : null)}
-                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                  archiveTtlHours === opt.hours
-                    ? "bg-indigo-600 text-white"
-                    : "bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-            <button
-              onClick={clearArchive}
-              disabled={archived.length === 0}
-              className={`ml-auto rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                archived.length === 0
-                  ? "cursor-not-allowed bg-neutral-900 text-neutral-600"
-                  : "bg-red-600/20 text-red-400 hover:bg-red-600/30"
-              }`}
-            >
-              Очистить
-            </button>
-          </div>
-          {archived.length > 0 ? (
-            <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-4 hide-scrollbar">
-              {archived.map((c) => (
-                <div
-                  key={c.id}
-                  className="group rounded-xl bg-neutral-900 p-4 transition-colors hover:bg-neutral-800"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium line-clamp-2">{c.title}</p>
-                      {c.url && (
-                        <a
-                          href={c.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-1 block truncate text-xs text-indigo-400 hover:underline"
-                        >
-                          {c.url}
-                        </a>
-                      )}
-                    </div>
-                    <div className="flex flex-shrink-0 items-center gap-1.5 self-start">
-                      <span className="rounded-md bg-neutral-800 px-2 py-1 text-[10px] text-neutral-500">
-                        {c.type === "photo" ? "📷" : c.type === "video" ? "🎬" : c.type === "text" ? "📝" : c.type === "forward" ? "📨" : "🔗"}
-                      </span>
-                      <button
-                        onClick={() => returnToDeck(c)}
-                        aria-label="Вернуть в стопку"
-                        title="Вернуть в стопку"
-                        className="flex size-8 items-center justify-center rounded-full bg-neutral-800 text-neutral-300 transition-colors hover:bg-neutral-700"
-                      >
-                        <Undo2 className="size-4" />
-                      </button>
-                      <button
-                        onClick={() => openBookmark(c)}
-                        aria-label="Открыть"
-                        title="Открыть"
-                        className="flex size-8 items-center justify-center rounded-full bg-neutral-800 text-indigo-400 transition-colors hover:bg-neutral-700"
-                      >
-                        <ExternalLink className="size-4" />
-                      </button>
-                    </div>
-                  </div>
-                  <p className="mt-2 text-[10px] text-neutral-600">
-                    {new Date(c.createdAt).toLocaleString("ru", {
-                      day: "numeric",
-                      month: "long",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+              <div className="flex items-center gap-3">
+                <div className="flex size-11 items-center justify-center rounded-2xl bg-red-600/20 text-red-400">
+                  <Trash2 className="size-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-text">Очистить архив?</h2>
+                  <p className="text-xs text-muted">
+                    Будут удалены все карточки архива. Действие необратимо.
                   </p>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-              <div className="text-5xl">🗂️</div>
-              <p className="text-neutral-400">Архив пуст</p>
-              <p className="text-sm text-neutral-500">Свайпни влево, чтобы отправить в архив</p>
-            </div>
-          )}
-        </div>
-      )}
+              </div>
+              <div className="mt-5 flex gap-2.5">
+                <button
+                  onClick={() => setClearConfirmOpen(false)}
+                  className="flex-1 rounded-full bg-surface py-2.5 text-sm font-medium text-muted transition-colors hover:bg-line"
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={clearArchive}
+                  className="flex-1 rounded-full bg-red-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-500"
+                >
+                  Удалить всё
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

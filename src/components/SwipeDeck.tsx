@@ -2,9 +2,10 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
-import { X, ExternalLink, Undo2 } from "lucide-react";
+import { X, ExternalLink, Clock } from "lucide-react";
 import { BookmarkCard, type SwipeDirection } from "@/components/BookmarkCard";
 import type { Bookmark } from "@/app/api/bookmarks/route";
+import { useTelegram } from "@/components/TelegramProvider";
 
 export function SwipeDeck({
   bookmarks,
@@ -17,6 +18,7 @@ export function SwipeDeck({
 }) {
   const [exitX, setExitX] = useState(500);
   const [exitY, setExitY] = useState(0);
+  const telegram = useTelegram();
 
   if (bookmarks.length === 0) return null;
 
@@ -36,7 +38,7 @@ export function SwipeDeck({
           {bookmarks.slice(1, 3).map((_, i) => (
             <motion.div
               key={i}
-              className="absolute inset-0 rounded-2xl bg-neutral-900 shadow-xl"
+              className="absolute inset-0 rounded-2xl bg-surface shadow-xl"
               style={{
                 transform: `scale(${1 - (i + 1) * 0.04}) translateY(${(i + 1) * 6}px)`,
               }}
@@ -62,45 +64,54 @@ export function SwipeDeck({
             />
           </motion.div>
         </AnimatePresence>
+      </div>
 
-        {/* Progress indicator - behind the card */}
-        <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 pointer-events-none" style={{ zIndex: 5 }}>
-          {bookmarks.map((_, i) => (
-            <div
-              key={i}
-              className={`h-1.5 rounded-full transition-all ${
-                i === 0 ? "w-6 bg-white" : "w-1.5 bg-neutral-800"
-              }`}
-            />
-          ))}
+      {/* Счётчик оставшихся в стопке */}
+      <div className="pointer-events-none absolute top-3 left-0 right-0 flex justify-center" style={{ zIndex: 30 }}>
+        <div className="flex items-baseline gap-1 rounded-full bg-black/50 px-3 py-1 backdrop-blur-sm">
+          <span className="text-sm font-bold text-white tabular-nums">
+            {bookmarks.length}
+          </span>
+          <span className="text-[10px] uppercase tracking-wide text-white/70">
+            в стопке
+          </span>
         </div>
       </div>
 
-      {/* Action buttons */}
-      <div className="flex items-center justify-center gap-5 py-4" style={{ zIndex: 20 }}>
+      {/* Action buttons - Tinder style */}
+      <div className="flex items-center justify-center gap-6 py-4" style={{ zIndex: 20 }}>
         <button
-          onClick={() => handleSwipe("left")}
-          aria-label="Отмена"
-          title="Отмена"
-          className="flex size-12 items-center justify-center rounded-full bg-neutral-800 text-rose-400 transition-transform active:scale-90"
+          onClick={() => {
+            telegram?.haptic.impact("medium");
+            handleSwipe("left");
+          }}
+          aria-label="В архив"
+          title="В архив"
+          className="flex size-14 items-center justify-center rounded-full border-2 border-danger/40 bg-surface text-danger transition-transform active:scale-90"
         >
           <X className="size-6" />
         </button>
         <button
-          onClick={() => onOpen(current)}
+          onClick={() => {
+            telegram?.haptic.impact("heavy");
+            onOpen(current);
+          }}
           aria-label="Открыть"
           title="Открыть"
-          className="flex size-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg transition-transform active:scale-90"
+          className="flex size-16 items-center justify-center rounded-full bg-accent text-accent-text shadow-lg shadow-accent/30 transition-transform active:scale-90"
         >
           <ExternalLink className="size-7" />
         </button>
         <button
-          onClick={() => handleSwipe("right")}
+          onClick={() => {
+            telegram?.haptic.impact("light");
+            handleSwipe("right");
+          }}
           aria-label="Позже"
           title="Позже"
-          className="flex size-12 items-center justify-center rounded-full bg-neutral-800 text-emerald-400 transition-transform active:scale-90"
+          className="flex size-14 items-center justify-center rounded-full border-2 border-success/40 bg-surface text-success transition-transform active:scale-90"
         >
-          <Undo2 className="size-6" />
+          <Clock className="size-6" />
         </button>
       </div>
     </div>

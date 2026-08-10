@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Telegram Mini App theme vars */
+/* Telegram Mini App theme vars (fallbacks for dev outside Telegram) */
 :root {
   --tg-theme-bg-color: #000000;
   --tg-theme-text-color: #ffffff;
@@ -11,6 +11,20 @@
   --tg-theme-secondary-bg-color: #1c1c1d;
 
   color-scheme: dark;
+}
+
+/* Semantic design tokens — одно место для акцентов и поверхностей */
+@theme inline {
+  --color-bg: var(--tg-theme-bg-color);
+  --color-surface: var(--tg-theme-secondary-bg-color);
+  --color-accent: var(--tg-theme-button-color, #6366f1);
+  --color-accent-text: var(--tg-theme-button-text-color, #ffffff);
+  --color-link: var(--tg-theme-link-color, #2481cc);
+  --color-text: var(--tg-theme-text-color);
+  --color-muted: var(--tg-theme-hint-color);
+  --color-line: color-mix(in srgb, var(--tg-theme-text-color) 12%, transparent);
+  --color-danger: #f43f5e;
+  --color-success: #34d399;
 }
 
 html,

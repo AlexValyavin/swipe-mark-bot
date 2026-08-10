@@ -11,7 +11,7 @@ export const metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ru">
-      <body className="bg-black text-white antialiased h-dvh w-full overflow-hidden">
+      <body className="bg-bg text-text antialiased h-dvh w-full overflow-hidden">
         <TelegramProvider>{children}</TelegramProvider>
       </body>
     </html>
