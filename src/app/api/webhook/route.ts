@@ -122,11 +122,18 @@ export async function POST(req: NextRequest) {
       if (data.type !== "forward") data.type = mediaItem.type;
     } else if (urls.length > 0) {
       if (data.type !== "forward") data.type = "link";
-      const preview = await fetchLinkPreview(urls[0]);
-      if (preview?.imageUrl) data.imageUrl = preview.imageUrl;
-      ogTitle = preview?.title;
-      if (preview?.description) {
-        data.description = preview.description.slice(0, 500);
+      const ytThumb = getYouTubeThumbnail(urls[0]);
+      if (ytThumb) {
+        // YouTube отдаёт боту JS-шелл без OG-тегов, а заставку можно собрать
+        // детерминированно по ID видео — это надёжнее парсинга страницы.
+        data.imageUrl = ytThumb;
+      } else {
+        const preview = await fetchLinkPreview(urls[0]);
+        if (preview?.imageUrl) data.imageUrl = preview.imageUrl;
+        ogTitle = preview?.title;
+        if (preview?.description) {
+          data.description = preview.description.slice(0, 500);
+        }
       }
     }
 
@@ -456,4 +463,34 @@ function deriveTitle(opts: {
 function extractUrls(text: string): string[] {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   return text.match(urlRegex) || [];
+}
+
+function getYouTubeThumbnail(url: string): string | null {
+  const videoId = extractYouTubeVideoId(url);
+  if (!videoId) return null;
+  return `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/maxresdefault.jpg`;
+}
+
+function extractYouTubeVideoId(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.toLowerCase().replace(/^www\./, "").replace(/^m\./, "");
+    if (host === "youtu.be") {
+      const id = u.pathname.split("/")[1] || "";
+      return id || null;
+    }
+    if (host !== "youtube.com" && host !== "youtube-nocookie.com") return null;
+    if (u.pathname === "/watch" || u.pathname.startsWith("/watch/")) {
+      return u.searchParams.get("v");
+    }
+    for (const prefix of ["/shorts/", "/embed/", "/live/", "/v/"]) {
+      if (u.pathname.startsWith(prefix)) {
+        const id = u.pathname.slice(prefix.length).split("/")[0] || "";
+        return id || null;
+      }
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
 }
