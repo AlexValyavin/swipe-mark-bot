@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { getSessionUser } from "@/lib/session";
+import { resolveFileUrl, isPlaceholderImage } from "@/lib/telegram-file";
 
 export const runtime = "nodejs";
 
@@ -62,20 +63,70 @@ export async function GET(req: NextRequest) {
 
     const bookmarks: Bookmark[] = [];
 
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+
+    const foldItem = async (item: Record<string, unknown>) => {
+      const itemFileId = typeof item.fileId === "string" ? item.fileId : undefined;
+      if (!itemFileId) return item;
+      const itemImageUrl = typeof item.imageUrl === "string" ? item.imageUrl : undefined;
+      if (!isPlaceholderImage(itemImageUrl)) return item;
+      const resolved = await resolveFileUrl(itemFileId, token);
+      if (!resolved) return item;
+      const itemType = typeof item.type === "string" ? item.type : "";
+      if (itemType === "video" && typeof item.videoUrl !== "string") {
+        return { ...item, videoUrl: resolved };
+      }
+      return { ...item, imageUrl: resolved };
+    };
+
+    // Миграция старых карточек: placeholder-превью (https://via.placeholder.com/300)
+    // и давно сохранённые fileId без /api/file URL. Самовосстанавливается при чтении:
+    // недостающие imageUrl/videoUrl резолвятся из Telegram и фиксируются в Firestore,
+    // чтобы карточки не ломались после обновления приложения.
+    const repairs: Promise<unknown>[] = [];
     for (const doc of snapshot.docs) {
-      const data = doc.data() as Omit<Bookmark, "id">;
-      const createdAt = new Date(data.createdAt || 0).getTime();
-      if (
-        cutoff &&
-        data.status === "archived" &&
-        createdAt &&
-        createdAt < cutoff
-      ) {
+      const raw = doc.data() as Record<string, unknown>;
+      const createdAt = new Date(typeof raw.createdAt === "string" ? raw.createdAt : 0).getTime();
+      if (cutoff && raw.status === "archived" && createdAt && createdAt < cutoff) {
         await doc.ref.delete();
         continue;
       }
+
+      const data = raw as Omit<Bookmark, "id">;
+      const update: Record<string, string | import("firebase-admin/firestore").FieldValue> = {};
+      let changed = false;
+
+      const rootImageUrl = typeof data.imageUrl === "string" ? data.imageUrl : undefined;
+      const rootFileId = typeof data.fileId === "string" ? data.fileId : undefined;
+      if (rootFileId && isPlaceholderImage(rootImageUrl)) {
+        const resolved = await resolveFileUrl(rootFileId, token);
+        if (resolved) {
+          data.imageUrl = resolved;
+          update.imageUrl = resolved;
+          changed = true;
+        }
+      }
+
+      const items = Array.isArray(data.mediaItems)
+        ? (data.mediaItems as Array<Record<string, unknown>>)
+        : [];
+      if (items.length > 0) {
+        const resolvedItems = await Promise.all(items.map(foldItem));
+        const anyFixed = resolvedItems.some((item, i) => item !== items[i]);
+        if (anyFixed) {
+          data.mediaItems = resolvedItems as Omit<Bookmark, "id">["mediaItems"];
+          update.mediaItems = resolvedItems as unknown as import("firebase-admin/firestore").FieldValue;
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        repairs.push(doc.ref.update(update).catch(() => {}));
+      }
+
       bookmarks.push({ id: doc.id, ...data });
     }
+    await Promise.all(repairs);
 
     const result = bookmarks
       .sort(
