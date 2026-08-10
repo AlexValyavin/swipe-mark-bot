@@ -457,11 +457,19 @@ export default function Home() {
                             className="group flex items-center gap-3 rounded-xl bg-surface p-3 transition-colors hover:bg-line"
                           >
                             {thumbFor(c) ? (
-                              <img
-                                src={thumbFor(c) as string}
-                                alt=""
-                                className="size-12 flex-shrink-0 rounded-lg object-cover"
-                              />
+                              <div className="relative size-12 flex-shrink-0 overflow-hidden rounded-lg bg-bg">
+                                <div className="absolute inset-0 flex items-center justify-center text-xl">
+                                  {typeEmoji(c)}
+                                </div>
+                                <img
+                                  src={thumbFor(c) as string}
+                                  alt=""
+                                  className="absolute inset-0 size-full rounded-lg object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none";
+                                  }}
+                                />
+                              </div>
                             ) : (
                               <div className="flex size-12 flex-shrink-0 items-center justify-center rounded-lg bg-bg text-xl">
                                 {typeEmoji(c)}

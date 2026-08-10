@@ -83,6 +83,8 @@ export async function GET(req: NextRequest) {
     // и давно сохранённые fileId без /api/file URL. Самовосстанавливается при чтении:
     // недостающие imageUrl/videoUrl резолвятся из Telegram и фиксируются в Firestore,
     // чтобы карточки не ломались после обновления приложения.
+    let repairedCount = 0;
+    let failedRepairCount = 0;
     const repairs: Promise<unknown>[] = [];
     for (const doc of snapshot.docs) {
       const raw = doc.data() as Record<string, unknown>;
@@ -104,6 +106,11 @@ export async function GET(req: NextRequest) {
           data.imageUrl = resolved;
           update.imageUrl = resolved;
           changed = true;
+        } else {
+          failedRepairCount++;
+          console.warn(
+            `[bookmarks] repair failed fileId=${rootFileId} type=${data.type} url=${rootImageUrl ?? "none"}`
+          );
         }
       }
 
@@ -121,12 +128,18 @@ export async function GET(req: NextRequest) {
       }
 
       if (changed) {
+        repairedCount++;
         repairs.push(doc.ref.update(update).catch(() => {}));
       }
 
       bookmarks.push({ id: doc.id, ...data });
     }
     await Promise.all(repairs);
+    if (repairedCount > 0 || failedRepairCount > 0) {
+      console.log(
+        `[bookmarks] migration userId=${userId} repaired=${repairedCount} failed=${failedRepairCount}`
+      );
+    }
 
     const result = bookmarks
       .sort(

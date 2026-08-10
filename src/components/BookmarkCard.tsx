@@ -37,6 +37,7 @@ export function BookmarkCard({
 }) {
   const dragged = useRef(false);
   const [mediaIndex, setMediaIndex] = useState(0);
+  const [imgError, setImgError] = useState(false);
   const telegram = useTelegram();
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -99,8 +100,13 @@ export function BookmarkCard({
     >
       {/* Media / Content Area */}
       <div className="relative flex-1 w-full bg-bg min-h-[200px]">
-        {imageSrc ? (
-          <img src={imageSrc} alt="" className="h-full w-full object-cover" />
+        {imageSrc && !imgError ? (
+          <img
+            src={imageSrc}
+            alt=""
+            onError={() => setImgError(true)}
+            className="h-full w-full object-cover"
+          />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-indigo-900 to-purple-900 text-white/20">
             <span className="text-6xl">🔗</span>
