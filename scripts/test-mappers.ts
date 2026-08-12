@@ -137,3 +137,16 @@ test("fields stay undefined when no folders passed", () => {
   const b = cardToBookmark(card, [], []);
   assert.equal(b.folders, undefined);
 });
+
+test("tags propagate to Bookmark when passed", () => {
+  const card = stubCard({ source_type: "link" });
+  const tags = [{ id: "t1", name: "дизайн" }];
+  const b = cardToBookmark(card, [], [], [], tags);
+  assert.deepEqual(b.tags, tags);
+});
+
+test("tags stay undefined when not passed", () => {
+  const card = stubCard({ source_type: "link" });
+  const b = cardToBookmark(card, [], []);
+  assert.equal(b.tags, undefined);
+});

@@ -13,6 +13,9 @@ import {
   Clock,
   Undo2,
   ExternalLink,
+  Tag,
+  ChevronDown,
+  Check,
 } from "lucide-react";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 import { useTelegram } from "@/components/TelegramProvider";
@@ -41,6 +44,9 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
   const [tab, setTab] = useState<LibraryTab>("deck");
   const [folderId, setFolderId] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [tagsOpen, setTagsOpen] = useState(false);
+  const [availableTags, setAvailableTags] = useState<{ id: string; name: string; count: number }[]>([]);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [folders, setFolders] = useState<FolderMeta[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,6 +56,26 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
   const [deleteOpen, setDeleteOpen] = useState<string | null>(null);
   const [folderMenuCard, setFolderMenuCard] = useState<Bookmark | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [tagMenuCard, setTagMenuCard] = useState<Bookmark | null>(null);
+  const [tagPickerOpen, setTagPickerOpen] = useState(false);
+
+  const loadTags = async () => {
+    try {
+      const res = await fetch("/api/tags");
+      const data = await res.json();
+      if (!data.error) {
+        setAvailableTags(
+          (data.tags || []).map((t: { id: string; name: string; count: number }) => ({
+            id: t.id,
+            name: t.name,
+            count: t.count,
+          }))
+        );
+      }
+    } catch {
+      // молча игнорируем, чипы просто не появятся
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -58,6 +84,7 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
       params.set("tab", tab);
       if (folderId) params.set("folderId", folderId);
       if (q.trim()) params.set("q", q.trim());
+      if (selectedTags.length > 0) params.set("tags", selectedTags.join(","));
       const res = await fetch(`/api/library?${params}`);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -81,11 +108,19 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
 
   useEffect(() => {
     const t = setTimeout(() => {
+      void loadTags();
+    }, 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
       void load();
     }, 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, folderId, refreshSignal]);
+  }, [tab, folderId, selectedTags, refreshSignal]);
 
   // дебаунс поиска
   useEffect(() => {
@@ -152,6 +187,38 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
     setCardFolders(folderMenuCard.id, ids);
     setPickerOpen(false);
     setFolderMenuCard(null);
+  };
+
+  const toggleTag = (name: string) => {
+    telegram?.haptic.selection();
+    setSelectedTags((prev) =>
+      prev.includes(name) ? prev.filter((t) => t !== name) : [...prev, name]
+    );
+  };
+
+  const saveCardTags = async (cardId: string, names: string[]) => {
+    const res = await fetch(`/api/cards/${cardId}/tags`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ names }),
+    });
+    const data = await res.json();
+    if (!res.ok) return data?.error || "Ошибка сохранения тегов";
+    telegram?.haptic.selection();
+    await Promise.all([load(), loadTags()]);
+    return null;
+  };
+
+  const toggleTagOnCard = (card: Bookmark, name: string) => {
+    const cur = card.tags?.map((t) => t.name) ?? [];
+    const next = cur.includes(name) ? cur.filter((t) => t !== name) : [...cur, name];
+    setTagMenuCard({ ...card, tags: next.map((n) => ({ id: "tmp-" + n, name: n })) });
+  };
+
+  const removeSingleTag = async (card: Bookmark, tag: { id: string; name: string }) => {
+    await fetch(`/api/cards/${card.id}/tags/${tag.id}`, { method: "DELETE" });
+    telegram?.haptic.selection();
+    await Promise.all([load(), loadTags()]);
   };
 
   const tabs: { key: LibraryTab; label: string }[] = [
@@ -254,6 +321,59 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
         </button>
       </div>
 
+      {/* Tag filter */}
+      <div className="flex items-center gap-1.5 overflow-x-auto px-5 py-1.5 hide-scrollbar">
+        <button
+          onClick={() => {
+            telegram?.haptic.selection();
+            setTagsOpen((v) => !v);
+          }}
+          className={`flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
+            selectedTags.length > 0
+              ? "bg-accent text-accent-text"
+              : "bg-surface text-muted hover:text-text"
+          }`}
+        >
+          <Tag className="size-3.5" />
+          {selectedTags.length > 0 ? `Теги: ${selectedTags.length}` : "Теги"}
+          <ChevronDown className={`size-3 transition-transform ${tagsOpen ? "rotate-180" : ""}`} />
+        </button>
+        {selectedTags.length > 0 && (
+          <button
+            onClick={() => {
+              telegram?.haptic.selection();
+              setSelectedTags([]);
+            }}
+            className="flex shrink-0 items-center gap-1 rounded-full bg-surface px-2.5 py-1.5 text-xs text-muted hover:text-text"
+          >
+            <X className="size-3" />
+            Сбросить
+          </button>
+        )}
+        {tagsOpen && (
+          <div className="flex items-center gap-1.5">
+            {availableTags.map((t) => {
+              const active = selectedTags.includes(t.name);
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => toggleTag(t.name)}
+                  className={`flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
+                    active ? "bg-accent text-accent-text" : "bg-surface text-muted hover:text-text"
+                  }`}
+                >
+                  <span>{t.name}</span>
+                  <span className="opacity-60">{t.count}</span>
+                </button>
+              );
+            })}
+            {availableTags.length === 0 && (
+              <span className="shrink-0 text-xs text-muted">Нет тегов</span>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Content */}
       <div className="flex min-h-0 flex-1 flex-col">
         {loading ? (
@@ -313,6 +433,21 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
                         )}
                       </div>
                     )}
+                    {b.tags && b.tags.length > 0 && (
+                      <div className="mt-0.5 flex items-center gap-1 overflow-hidden">
+                        {b.tags.slice(0, 3).map((t) => (
+                          <span
+                            key={t.id}
+                            className="max-w-[90px] truncate rounded bg-bg px-1.5 py-0.5 text-[10px] text-accent"
+                          >
+                            #{t.name}
+                          </span>
+                        ))}
+                        {b.tags.length > 3 && (
+                          <span className="text-[10px] text-muted">+{b.tags.length - 3}</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-shrink-0 items-center gap-1">
                     {tab === "archive" && (
@@ -352,6 +487,18 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
                       className="flex size-8 items-center justify-center rounded-full bg-surface text-accent hover:bg-line active:scale-90"
                     >
                       <Folder className="size-4" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        telegram?.haptic.selection();
+                        setTagMenuCard(b);
+                        setTagPickerOpen(true);
+                      }}
+                      aria-label="Теги"
+                      title="Теги"
+                      className="flex size-8 items-center justify-center rounded-full bg-surface text-accent hover:bg-line active:scale-90"
+                    >
+                      <Tag className="size-4" />
                     </button>
                     <button
                       onClick={() => {
@@ -414,6 +561,31 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
               setFolderMenuCard(null);
             }}
             onCreate={(name, emoji) => createFolder(name, emoji)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Tag picker */}
+      <AnimatePresence>
+        {tagPickerOpen && tagMenuCard && (
+          <TagPickerModal
+            card={tagMenuCard}
+            tags={availableTags}
+            onToggle={(name) => toggleTagOnCard(tagMenuCard, name)}
+            onRemove={(tagName) => toggleTagOnCard(tagMenuCard, tagName)}
+            onSave={() => {
+              const names = tagMenuCard.tags?.map((t) => t.name) ?? [];
+              void saveCardTags(tagMenuCard.id, names).then((err) => {
+                if (!err) {
+                  setTagPickerOpen(false);
+                  setTagMenuCard(null);
+                }
+              });
+            }}
+            onClose={() => {
+              setTagPickerOpen(false);
+              setTagMenuCard(null);
+            }}
           />
         )}
       </AnimatePresence>
@@ -666,6 +838,161 @@ function FolderPickerModal({
             <Plus className="size-5" />
           </button>
         </div>
+        <div className="mt-5 flex gap-2.5">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-full bg-surface py-2.5 text-sm font-medium text-muted hover:bg-line"
+          >
+            Отмена
+          </button>
+          <button
+            onClick={() => {
+              telegram?.haptic.selection();
+              onSave();
+            }}
+            className="flex-1 rounded-full bg-accent py-2.5 text-sm font-semibold text-accent-text"
+          >
+            Готово
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function TagPickerModal({
+  card,
+  tags,
+  onToggle,
+  onRemove,
+  onSave,
+  onClose,
+}: {
+  card: Bookmark;
+  tags: { id: string; name: string; count: number }[];
+  onToggle: (name: string) => void;
+  onRemove: (name: string) => void;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  const telegram = useTelegram();
+  const [input, setInput] = useState("");
+  const selected = card.tags?.map((t) => t.name) ?? [];
+  const filtered = tags.filter(
+    (t) => !selected.includes(t.name) && t.name.toLowerCase().includes(input.toLowerCase().trim())
+  );
+  const canAdd = input.trim().length > 0 && !selected.includes(input.trim().toLowerCase());
+
+  const addNew = () => {
+    const name = input.trim().toLowerCase();
+    if (!name || selected.includes(name)) return;
+    telegram?.haptic.selection();
+    onToggle(name);
+    setInput("");
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ y: 60, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 60, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+        className="w-full max-w-sm rounded-t-3xl border border-line bg-surface p-6 sm:rounded-3xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-base font-bold text-text">Теги карточки</h2>
+
+        {/* Selected chips */}
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {selected.map((name) => (
+            <span
+              key={name}
+              className="flex items-center gap-1 rounded-full bg-accent/15 px-2.5 py-1 text-xs font-medium text-accent"
+            >
+              #{name}
+              <button
+                onClick={() => {
+                  telegram?.haptic.selection();
+                  onRemove(name);
+                }}
+                aria-label={`Убрать тег ${name}`}
+                className="flex size-3.5 items-center justify-center rounded-full hover:bg-black/20"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          ))}
+          {selected.length === 0 && (
+            <span className="text-xs text-muted">Тегов пока нет</span>
+          )}
+        </div>
+
+        {/* Input */}
+        <div className="mt-3 flex items-center gap-2">
+          <div className="flex flex-1 items-center gap-2 rounded-xl bg-bg px-3 py-2">
+            <Tag className="size-4 text-muted" />
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addNew();
+                }
+              }}
+              placeholder="Добавить тег…"
+              maxLength={40}
+              className="w-full bg-transparent text-sm text-text placeholder:text-muted focus:outline-none"
+            />
+          </div>
+          <button
+            onClick={addNew}
+            disabled={!canAdd}
+            aria-label="Добавить тег"
+            className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent disabled:opacity-40"
+          >
+            <Plus className="size-5" />
+          </button>
+        </div>
+
+        {/* Suggestions / add-new hint */}
+        {canAdd && (
+          <button
+            onClick={addNew}
+            className="mt-2 flex w-full items-center gap-2 rounded-xl bg-bg px-3 py-2.5 text-sm text-accent"
+          >
+            <Plus className="size-4" />
+            Создать «{input.trim().toLowerCase()}»
+          </button>
+        )}
+
+        {/* Autocomplete list */}
+        {filtered.length > 0 && (
+          <div className="mt-2 flex max-h-44 flex-col gap-1 overflow-y-auto hide-scrollbar">
+            {filtered.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => {
+                  telegram?.haptic.selection();
+                  onToggle(t.name);
+                }}
+                className="flex items-center gap-2 rounded-lg bg-bg px-3 py-2.5 text-left text-sm text-text hover:bg-line"
+              >
+                <Tag className="size-4 text-muted" />
+                <span className="flex-1 truncate">{t.name}</span>
+                <span className="text-xs text-muted">{t.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="mt-5 flex gap-2.5">
           <button
             onClick={onClose}

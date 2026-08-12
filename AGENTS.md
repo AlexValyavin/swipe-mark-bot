@@ -23,11 +23,17 @@ Mini App where users swipe through saved bookmarks. UI copy is Russian (`<html l
 
 ## Repositories (`src/lib/db/*`) — the only place with Supabase queries
 - `supabase.ts` — service-role client. `types.ts` — row types. `mappers.ts` — `cardToBookmark()` reconstructs the frontend `Bookmark` contract from relational rows (type/sourceType/status maps, `/api/file?fileId=` URLs, `forwardUrl` from `source_url`, optional `folders` meta).
-- `cards.ts` — list/get/create/update media-group lookup, archived TTL deletes, `listForLibrary()` (statuses/folder/search/sort/cursor). `settings.ts` — `archive_ttl_hours`. `swipes.ts` — idempotency check, action logging, right-swipe counting. `folders.ts` — folder CRUD + counts + `setCardFolders` (scope-checked). `tags.ts`, `pairing.ts` — future stages (tag/pairing repos exist).
+- `cards.ts` — list/get/create/update media-group lookup, archived TTL deletes, `listForLibrary()` (statuses/folder/search/sort/cursor). `settings.ts` — `archive_ttl_hours`. `swipes.ts` — idempotency check, action logging, right-swipe counting. `folders.ts` — folder CRUD + counts + `setCardFolders` (scope-checked). `tags.ts` — `findOrCreateTag` (lower+trim+схлоп пробелов), `listTagsByUser` (join card_tags, топ-50 по частоте), `addCardTags` (upsert + связи), `setCardTags` (полная замена связей + чистка осиротевших тегов), `removeCardTag`, `getTagsForCardIds`. `pairing.ts` — future stage (pairing repo exists).
+- `cards.ts` — list/get/create/update media-group lookup, archived TTL deletes, `listForLibrary()` (statuses/folder/tags/search/sort/cursor; поиск и по имени тега). 
+- `settings.ts` — `archive_ttl_hours`.
+- `swipes.ts` — idempotency check, action logging, right-swipe counting.
+- `folders.ts` — folder CRUD + counts + `setCardFolders` (scope-checked).
+- `tags.ts` — bucket: `.findOrCreateTag` (`lower+trim+схлоп пробелов`, race-safe 23505), `.listTagsByUser` (join `card_tags`, топ-50 по частоте), `.addCardTags` (upsert+sвязи), `.setCardTags` (замена связей + чистка orphan), `.removeCardTag`, `.getTagsForCardIds`.
+- `pairing.ts` — future stage (tag/pairing repos exist).
 
 ## Frontend
-- Tabs: «Входящие» (swipe deck), «Библиотека» (`Library.tsx` — search, folder chips + counts, tabs В колоде/Позже/Архив, create/delete folder modals, card folder picker), «Архив».
-- Library API: `GET /api/library` (`tab`, `folderId`, `q`, `sort`, `cursor`), `GET/POST /api/folders`, `PATCH/DELETE /api/folders/[id]`, `POST /api/cards/[id]/folders`.
+- Tabs: «Входящие» (swipe deck), «Библиотека» (`Library.tsx` — search, folder chips + counts + tag filter «Теги ▾» (мультивыбор OR), tabs В колоде/Позже/Архив, create/delete folder modals, folder picker, tag picker с чипами/инпут/автокомплит, чипы тегов на карточке (≤3)), «Архив».
+- Library API: `GET /api/library` (`tab`, `folderId`, `q`, `tags=a,b`, `sort`, `cursor`), `GET /api/tags` (`q`), `POST /api/cards/[id]/tags` (`names`), `DELETE /api/cards/[id]/tags/[tagId]`, `GET/POST /api/folders`, `PATCH/DELETE /api/folders/[id]`, `POST /api/cards/[id]/folders`.
 
 ## Env vars (`.env.local`, none committed)
 - `TELEGRAM_BOT_TOKEN` — used by the webhook and auth HMAC

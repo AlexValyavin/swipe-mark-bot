@@ -57,7 +57,8 @@ export function cardToBookmark(
   card: CardRow,
   attachments: AttachmentRow[],
   links: CardLinkRow[],
-  folders: BookmarkFolderMeta[] = []
+  folders: BookmarkFolderMeta[] = [],
+  tags: { id: string; name: string }[] = []
 ): Bookmark {
   const firstLink = links[0] ?? null;
 
@@ -111,5 +112,6 @@ export function cardToBookmark(
     swipedCount: 0,
     readTimeMin: 1,
     ...(folders.length > 0 ? { folders } : {}),
+    ...(tags.length > 0 ? { tags } : {}),
   };
 }

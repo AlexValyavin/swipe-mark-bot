@@ -71,6 +71,11 @@ export async function GET(req: NextRequest) {
     const statuses = TABS[tabRaw] ?? TABS.deck;
     const folderId = sp.get("folderId");
     const q = sp.get("q");
+    const tagsRaw = sp.get("tags");
+    const tags = (tagsRaw ?? "")
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
     const sort = sp.get("sort") === "oldest" ? "oldest" : "newest";
     const limit = Number(sp.get("limit") || 50);
     const before = sp.get("cursor");
@@ -79,6 +84,7 @@ export async function GET(req: NextRequest) {
       statuses,
       folderId: folderId || null,
       q: q || null,
+      tags: tags.length > 0 ? tags : null,
       sort,
       limit: Number.isFinite(limit) ? limit : 50,
       before: before || null,

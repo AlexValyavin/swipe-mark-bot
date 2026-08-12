@@ -93,6 +93,59 @@ export async function addCardTags(
   }
 }
 
+/**
+ * Полная замена набора тегов карточки: удаляет старые связи и добавляет новые.
+ */
+export async function setCardTags(
+  userId: string,
+  cardId: string,
+  rawNames: string[],
+  source: "manual" | "ai" = "manual"
+): Promise<void> {
+  const db = getAdminDb();
+  const { data: existing, error: delErr } = await db
+    .from("card_tags")
+    .delete()
+    .eq("card_id", cardId)
+    .select("tag_id");
+  if (delErr) throw delErr;
+
+  // Теги, которые всё ещё используются другими карточками, не удаляем полностью.
+  const names = rawNames
+    .map((n) => normalizeTagName(n))
+    .filter((n) => n.length > 0);
+
+  for (const name of names) {
+    const tag = await findOrCreateTag(userId, name, source);
+    const { error } = await db
+      .from("card_tags")
+      .upsert({ card_id: cardId, tag_id: tag.id, source })
+      .select("tag_id")
+      .single();
+    if (error) throw error;
+  }
+
+  // Чистим осиротевшие теги (без связей ни с одной карточкой пользователя).
+  if ((existing ?? []).length > 0) {
+    const orphanIds: string[] = [];
+    for (const row of existing ?? []) {
+      const { data: still } = await db
+        .from("card_tags")
+        .select("tag_id")
+        .eq("tag_id", row.tag_id)
+        .limit(1);
+      if ((still ?? []).length === 0) orphanIds.push(row.tag_id);
+    }
+    if (orphanIds.length > 0) {
+      await db
+        .from("tags")
+        .delete()
+        .eq("user_id", userId)
+        .in("id", orphanIds);
+    }
+  }
+}
+
 export async function removeCardTag(cardId: string, tagId: string): Promise<void> {
   const { error } = await getAdminDb()
     .from("card_tags")
@@ -109,4 +162,49 @@ export async function getCardTagIds(cardId: string): Promise<string[]> {
     .eq("card_id", cardId);
   if (error) throw error;
   return (data ?? []).map((r) => r.tag_id);
+}
+
+export async function getTagsForCardIds(
+  cardIds: string[]
+): Promise<Map<string, { id: string; name: string }[]>> {
+  const out = new Map<string, { id: string; name: string }[]>();
+  if (cardIds.length === 0) return out;
+
+  const db = getAdminDb();
+  const [ctRes, tagsRes] = await Promise.all([
+    db.from("card_tags").select("card_id, tag_id").in("card_id", cardIds),
+    db.from("tags").select("id, user_id, name"),
+  ]);
+  if (ctRes.error) throw ctRes.error;
+  if (tagsRes.error) throw tagsRes.error;
+
+  const names = new Map<string, string>();
+  for (const t of (tagsRes.data ?? []) as Array<{ id: string; name: string }>) {
+    names.set(t.id, t.name);
+  }
+
+  for (const ct of (ctRes.data ?? []) as Array<{ card_id: string; tag_id: string }>) {
+    const name = names.get(ct.tag_id);
+    if (!name) continue;
+    const list = out.get(ct.card_id) ?? [];
+    list.push({ id: ct.tag_id, name });
+    out.set(ct.card_id, list);
+  }
+  return out;
+}
+
+export async function getCardTagIdsMap(cardIds: string[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  if (cardIds.length === 0) return out;
+  const { data, error } = await getAdminDb()
+    .from("card_tags")
+    .select("card_id, tag_id")
+    .in("card_id", cardIds);
+  if (error) throw error;
+  for (const r of (data ?? []) as Array<{ card_id: string; tag_id: string }>) {
+    const list = out.get(r.card_id) ?? [];
+    list.push(r.tag_id);
+    out.set(r.card_id, list);
+  }
+  return out;
 }

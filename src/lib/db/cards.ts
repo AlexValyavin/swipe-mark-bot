@@ -6,6 +6,7 @@ import {
   type Bookmark,
   type BookmarkFolderMeta,
 } from "@/lib/db/mappers";
+import { getTagsForCardIds } from "@/lib/db/tags";
 
 export type CardInput = {
   source_type: string;
@@ -46,7 +47,7 @@ export type CardLinkInput = {
 };
 
 async function loadBookmark(card: CardRow): Promise<Bookmark> {
-  const [attRes, linkRes] = await Promise.all([
+  const [attRes, linkRes, tagsMap] = await Promise.all([
     getAdminDb()
       .from("attachments")
       .select("*")
@@ -57,8 +58,15 @@ async function loadBookmark(card: CardRow): Promise<Bookmark> {
       .select("*")
       .eq("card_id", card.id)
       .order("created_at", { ascending: true }),
+    getTagsForCardIds([card.id]),
   ]);
-  return cardToBookmark(card, (attRes.data ?? []) as AttachmentRow[], (linkRes.data ?? []) as CardLinkRow[]);
+  return cardToBookmark(
+    card,
+    (attRes.data ?? []) as AttachmentRow[],
+    (linkRes.data ?? []) as CardLinkRow[],
+    [],
+    tagsMap.get(card.id) ?? []
+  );
 }
 
 function assertNoError(error: PostgrestError | null): void {
@@ -99,9 +107,16 @@ export async function listForUser(userId: string): Promise<Bookmark[]> {
   }
 
   const folderMap = await loadFoldersForCards(cardIds);
+  const tagsMap = await getTagsForCardIds(cardIds);
 
   return cardsList.map((c) =>
-    cardToBookmark(c, atts.get(c.id) ?? [], links.get(c.id) ?? [], folderMap.get(c.id) ?? [])
+    cardToBookmark(
+      c,
+      atts.get(c.id) ?? [],
+      links.get(c.id) ?? [],
+      folderMap.get(c.id) ?? [],
+      tagsMap.get(c.id) ?? []
+    )
   );
 }
 
@@ -141,6 +156,7 @@ export type LibraryQuery = {
   statuses: string[];
   folderId?: string | null;
   q?: string | null;
+  tags?: string[] | null;
   sort?: "newest" | "oldest";
   limit?: number;
   before?: string | null;
@@ -179,6 +195,25 @@ export async function listForLibrary(
     );
   }
 
+  if (q.tags && q.tags.length > 0) {
+    const tagNames = q.tags.map((t) => t.toLowerCase().trim()).filter(Boolean);
+    const { data: tagRows } = await db
+      .from("tags")
+      .select("id")
+      .eq("user_id", userId)
+      .in("name", tagNames);
+    const tagIds = (tagRows ?? []).map((r) => r.id);
+    if (tagIds.length > 0) {
+      query = query.in(
+        "id",
+        (await db.from("card_tags").select("card_id").in("tag_id", tagIds))
+          .data?.map((r) => r.card_id) ?? []
+      );
+    } else {
+      query = query.in("id", []);
+    }
+  }
+
   if (q.q) {
     const { data: searched } = await db
       .from("cards")
@@ -186,8 +221,24 @@ export async function listForLibrary(
       .eq("user_id", userId)
       .or(`title.ilike.%${q.q}%,text.ilike.%${q.q}%`)
       .limit(500);
-    const searchIds = (searched ?? []).map((r) => r.id);
-    query = query.in("id", searchIds);
+    const searchIds = new Set((searched ?? []).map((r) => r.id));
+
+    // Совпадение по имени тега: добавляем карточки, где есть тег с q.
+    const { data: tagRows } = await db
+      .from("tags")
+      .select("id")
+      .eq("user_id", userId)
+      .ilike("name", `%${q.q}%`);
+    const tagIds = (tagRows ?? []).map((r) => r.id);
+    if (tagIds.length > 0) {
+      const { data: taggedCards } = await db
+        .from("card_tags")
+        .select("card_id")
+        .in("tag_id", tagIds);
+      for (const r of taggedCards ?? []) searchIds.add(r.card_id);
+    }
+
+    query = query.in("id", [...searchIds]);
   }
 
   if (sortDesc) query = query.order("created_at", { ascending: false });
@@ -214,10 +265,11 @@ export async function listForLibrary(
   const byId = new Map(cardsList.map((c) => [c.id, c]));
   const ordered = cardIds.map((id) => byId.get(id)).filter((c): c is CardRow => !!c);
 
-  const [attRes, linkRes, folderMap] = await Promise.all([
+  const [attRes, linkRes, folderMap, tagsMap] = await Promise.all([
     db.from("attachments").select("*").in("card_id", cardIds),
     db.from("card_links").select("*").in("card_id", cardIds),
     loadFoldersForCards(cardIds),
+    getTagsForCardIds(cardIds),
   ]);
   assertNoError(attRes.error);
   assertNoError(linkRes.error);
@@ -237,7 +289,13 @@ export async function listForLibrary(
 
   void hasMore;
   return ordered.map((c) =>
-    cardToBookmark(c, atts.get(c.id) ?? [], links.get(c.id) ?? [], folderMap.get(c.id) ?? [])
+    cardToBookmark(
+      c,
+      atts.get(c.id) ?? [],
+      links.get(c.id) ?? [],
+      folderMap.get(c.id) ?? [],
+      tagsMap.get(c.id) ?? []
+    )
   );
 }
 
