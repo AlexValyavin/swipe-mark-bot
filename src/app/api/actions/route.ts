@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminDb } from "@/lib/firebase-admin";
 import { getSessionUser } from "@/lib/session";
+import { getForUser, updateCard } from "@/lib/db/cards";
+import {
+  countRightSwipes,
+  getLatestStatusChange,
+  hasIdempotencyKey,
+  logAction,
+  type SwipeActionName,
+} from "@/lib/db/swipes";
 
 export const runtime = "nodejs";
 
 const ACTIONS = ["left", "right", "done", "open", "undo", "later"] as const;
-type Action = (typeof ACTIONS)[number];
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = getSessionUser(req);
+    const userId = await getSessionUser(req);
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -21,48 +27,35 @@ export async function POST(req: NextRequest) {
     }: { cardId?: string; action?: string; idempotencyKey?: string } =
       await req.json();
 
-    if (!cardId || !action || !ACTIONS.includes(action as Action)) {
+    if (!cardId || !action || !ACTIONS.includes(action as SwipeActionName)) {
       return NextResponse.json({ error: "Bad request" }, { status: 400 });
     }
 
-    const adminDb = getAdminDb();
-    const ref = adminDb.collection("bookmarks").doc(cardId);
-    const snap = await ref.get();
-    if (!snap.exists) {
+    const bookmark = await getForUser(userId, cardId);
+    if (!bookmark) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const data = snap.data() as Record<string, unknown>;
-    if (data.userId !== userId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     if (idempotencyKey) {
-      const seen = await adminDb
-        .collection("swipe_actions")
-        .where("idempotencyKey", "==", idempotencyKey)
-        .limit(1)
-        .get();
-      if (!seen.empty) {
+      const seen = await hasIdempotencyKey(idempotencyKey);
+      if (seen) {
         return NextResponse.json({ ok: true, alreadyProcessed: true });
       }
     }
 
-    const currentStatus = typeof data.status === "string" ? data.status : "new";
-    const previousStatus =
-      typeof data.previousStatus === "string" ? data.previousStatus : null;
+    const currentStatus = bookmark.status || "new";
     const now = Date.now();
 
     let newStatus = currentStatus;
     let deferUntil: string | null = null;
-    let rightCount = typeof data.rightCount === "number" ? data.rightCount : 0;
+    let rightCount: number | null = null;
 
-    switch (action as Action) {
+    switch (action as SwipeActionName) {
       case "left":
         newStatus = "archived";
         break;
       case "right":
-        rightCount += 1;
+        rightCount = (await countRightSwipes(cardId)) + 1;
         if (rightCount >= 5) {
           newStatus = "archived";
         } else {
@@ -74,10 +67,12 @@ export async function POST(req: NextRequest) {
         break;
       case "open":
         break;
-      case "undo":
-        newStatus = previousStatus || "new";
+      case "undo": {
+        const latest = await getLatestStatusChange(cardId);
+        newStatus = latest?.previous_status || "new";
         deferUntil = null;
         break;
+      }
       case "later":
         newStatus = "later";
         deferUntil = new Date(now + 24 * 60 * 60 * 1000).toISOString();
@@ -85,30 +80,24 @@ export async function POST(req: NextRequest) {
     }
 
     if (action !== "open") {
-      const update: Record<string, unknown> = {
+      await updateCard(cardId, {
         status: newStatus,
-        deferUntil,
-        previousStatus: action === "undo" ? null : currentStatus,
-      };
-      if (action === "right") {
-        update.rightCount = rightCount;
-      }
-      await ref.update(update);
+        defer_until: deferUntil,
+      });
     }
 
-    await adminDb.collection("swipe_actions").add({
+    await logAction({
       userId,
       cardId,
-      action,
-      previousStatus: currentStatus,
+      action: action as SwipeActionName,
+      previousStatus: action === "undo" ? null : currentStatus,
       idempotencyKey: idempotencyKey || null,
-      createdAt: new Date(now).toISOString(),
     });
 
     return NextResponse.json({
       ok: true,
       status: newStatus,
-      rightCount: action === "right" ? rightCount : undefined,
+      rightCount: rightCount === null ? undefined : rightCount,
     });
   } catch (e) {
     console.error("Actions error:", e);
