@@ -1,7 +1,11 @@
 import { getAdminDb } from "@/lib/db/supabase";
-import type { AttachmentRow, CardLinkRow, CardRow } from "@/lib/db/types";
+import type { AttachmentRow, CardLinkRow, CardRow, CardFoldersRow } from "@/lib/db/types";
 import type { PostgrestError } from "@supabase/supabase-js";
-import { cardToBookmark, type Bookmark } from "@/lib/db/mappers";
+import {
+  cardToBookmark,
+  type Bookmark,
+  type BookmarkFolderMeta,
+} from "@/lib/db/mappers";
 
 export type CardInput = {
   source_type: string;
@@ -94,8 +98,146 @@ export async function listForUser(userId: string): Promise<Bookmark[]> {
     links.set(l.card_id, list);
   }
 
+  const folderMap = await loadFoldersForCards(cardIds);
+
   return cardsList.map((c) =>
-    cardToBookmark(c, atts.get(c.id) ?? [], links.get(c.id) ?? [])
+    cardToBookmark(c, atts.get(c.id) ?? [], links.get(c.id) ?? [], folderMap.get(c.id) ?? [])
+  );
+}
+
+export async function loadFoldersForCards(cardIds: string[]): Promise<
+  Map<string, BookmarkFolderMeta[]>
+> {
+  if (cardIds.length === 0) return new Map();
+  const db = getAdminDb();
+  const [cfRes, foldersRes] = await Promise.all([
+    db.from("card_folders").select("card_id, folder_id").in("card_id", cardIds),
+    db.from("folders").select("id, user_id, name, emoji"),
+  ]);
+  assertNoError(cfRes.error);
+  assertNoError(foldersRes.error);
+
+  const folderMeta = new Map<string, BookmarkFolderMeta>();
+  for (const f of (foldersRes.data ?? []) as Array<{
+    id: string;
+    name: string;
+    emoji: string | null;
+  }>) {
+    folderMeta.set(f.id, { id: f.id, name: f.name, emoji: f.emoji });
+  }
+
+  const out = new Map<string, BookmarkFolderMeta[]>();
+  for (const cf of (cfRes.data ?? []) as CardFoldersRow[]) {
+    const meta = folderMeta.get(cf.folder_id);
+    if (!meta) continue;
+    const list = out.get(cf.card_id) ?? [];
+    list.push(meta);
+    out.set(cf.card_id, list);
+  }
+  return out;
+}
+
+export type LibraryQuery = {
+  statuses: string[];
+  folderId?: string | null;
+  q?: string | null;
+  sort?: "newest" | "oldest";
+  limit?: number;
+  before?: string | null;
+};
+
+/**
+ * Список карточек для библиотеки: фильтр по статусам, папке,
+ * полнотекстовый поиск (title/text), сортировка, курсор по created_at.
+ */
+export async function listForLibrary(
+  userId: string,
+  q: LibraryQuery
+): Promise<Bookmark[]> {
+  const db = getAdminDb();
+  const limit = q.limit && q.limit > 0 ? Math.min(q.limit, 100) : 50;
+  const statuses = q.statuses.length > 0 ? q.statuses : ["new", "later"];
+  const sortDesc = q.sort !== "oldest";
+  const cursor = q.before ?? q.before;
+
+  let query = db
+    .from("cards")
+    .select("id, created_at")
+    .eq("user_id", userId)
+    .in("status", statuses);
+
+  if (cursor) {
+    if (sortDesc) query = query.lt("created_at", cursor);
+    else query = query.gt("created_at", cursor);
+  }
+
+  if (q.folderId) {
+    query = query.in(
+      "id",
+      (await db.from("card_folders").select("card_id").eq("folder_id", q.folderId))
+        .data?.map((r) => r.card_id) ?? []
+    );
+  }
+
+  if (q.q) {
+    const { data: searched } = await db
+      .from("cards")
+      .select("id")
+      .eq("user_id", userId)
+      .or(`title.ilike.%${q.q}%,text.ilike.%${q.q}%`)
+      .limit(500);
+    const searchIds = (searched ?? []).map((r) => r.id);
+    query = query.in("id", searchIds);
+  }
+
+  if (sortDesc) query = query.order("created_at", { ascending: false });
+  else query = query.order("created_at", { ascending: true });
+  query = query.limit(limit + 1);
+
+  const { data: ids, error } = await query;
+  assertNoError(error);
+
+  const planned = (ids ?? []).map((r) => r.id);
+  const hasMore = planned.length > limit;
+  const cardIds = planned.slice(0, limit);
+
+  if (cardIds.length === 0) return [];
+
+  const { data: cards, error: cardErr } = await db
+    .from("cards")
+    .select("*")
+    .in("id", cardIds);
+  assertNoError(cardErr);
+  const cardsList = (cards ?? []) as CardRow[];
+
+  // preserve плановый порядок
+  const byId = new Map(cardsList.map((c) => [c.id, c]));
+  const ordered = cardIds.map((id) => byId.get(id)).filter((c): c is CardRow => !!c);
+
+  const [attRes, linkRes, folderMap] = await Promise.all([
+    db.from("attachments").select("*").in("card_id", cardIds),
+    db.from("card_links").select("*").in("card_id", cardIds),
+    loadFoldersForCards(cardIds),
+  ]);
+  assertNoError(attRes.error);
+  assertNoError(linkRes.error);
+
+  const atts = new Map<string, AttachmentRow[]>();
+  for (const a of (attRes.data ?? []) as AttachmentRow[]) {
+    const list = atts.get(a.card_id) ?? [];
+    list.push(a);
+    atts.set(a.card_id, list);
+  }
+  const links = new Map<string, CardLinkRow[]>();
+  for (const l of (linkRes.data ?? []) as CardLinkRow[]) {
+    const list = links.get(l.card_id) ?? [];
+    list.push(l);
+    links.set(l.card_id, list);
+  }
+
+  void hasMore;
+  return ordered.map((c) =>
+    cardToBookmark(c, atts.get(c.id) ?? [], links.get(c.id) ?? [], folderMap.get(c.id) ?? [])
   );
 }
 

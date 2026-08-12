@@ -11,14 +11,16 @@ import {
   Clock,
   Trash2,
   X,
+  LibraryBig,
 } from "lucide-react";
 import { useTelegram } from "@/components/TelegramProvider";
 import { SwipeDeck } from "@/components/SwipeDeck";
 import type { SwipeDirection } from "@/components/BookmarkCard";
 import { getOpenTarget } from "@/lib/openTarget";
 import type { Bookmark } from "@/app/api/bookmarks/route";
+import { Library } from "@/components/Library";
 
-type Tab = "inbox" | "archive";
+type Tab = "inbox" | "archive" | "library";
 
 function groupByDay(list: Bookmark[]) {
   const now = new Date();
@@ -64,6 +66,7 @@ export default function Home() {
   const [tab, setTab] = useState<Tab>("inbox");
   const [archiveTtlHours, setArchiveTtlHours] = useState<number | null>(null);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [librarySignal, setLibrarySignal] = useState(0);
   const [hintDismissed, setHintDismissed] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
     return localStorage.getItem("swipe-hint-seen") === "1";
@@ -137,6 +140,7 @@ export default function Home() {
   };
 
   const handleSwipe = async (direction: SwipeDirection, bookmark: Bookmark) => {
+    setLibrarySignal((s) => s + 1);
     if (direction === "left") {
       telegram?.haptic.impact("medium");
       setDeck((prev) => prev.filter((b) => b.id !== bookmark.id));
@@ -161,6 +165,7 @@ export default function Home() {
 
   const returnToDeck = (bookmark: Bookmark) => {
     telegram?.haptic.selection();
+    setLibrarySignal((s) => s + 1);
     setArchived((prev) => prev.filter((b) => b.id !== bookmark.id));
     setDeck((prev) => [bookmark, ...prev]);
     setTab("inbox");
@@ -169,6 +174,7 @@ export default function Home() {
 
   const postponeFromArchive = (bookmark: Bookmark) => {
     telegram?.haptic.selection();
+    setLibrarySignal((s) => s + 1);
     setArchived((prev) => prev.filter((b) => b.id !== bookmark.id));
     postAction(bookmark.id, "later");
   };
@@ -395,7 +401,7 @@ export default function Home() {
                 </div>
               )}
             </motion.div>
-          ) : (
+          ) : tab === "archive" ? (
             <motion.div
               key="archive"
               initial={{ opacity: 0, x: 16 }}
@@ -538,7 +544,14 @@ export default function Home() {
                 </div>
               )}
             </motion.div>
-          )}
+          ) : tab === "library" ? (
+            <Library
+              onOpen={openBookmark}
+              onPostpone={postponeFromArchive}
+              onReturnToDeck={returnToDeck}
+              refreshSignal={librarySignal}
+            />
+          ) : null}
         </AnimatePresence>
       </div>
 
@@ -562,6 +575,20 @@ export default function Home() {
             )}
           </div>
           <span className="text-[10px] font-medium">Входящие</span>
+        </button>
+        <button
+          onClick={() => {
+            telegram?.haptic.selection();
+            setTab("library");
+          }}
+          className={`relative flex flex-col items-center gap-0.5 px-6 py-1 transition-colors ${
+            tab === "library" ? "text-accent" : "text-muted"
+          }`}
+        >
+          <div className="relative">
+            <LibraryBig className="size-6" />
+          </div>
+          <span className="text-[10px] font-medium">Библиотека</span>
         </button>
         <button
           onClick={() => {

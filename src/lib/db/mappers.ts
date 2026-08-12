@@ -8,6 +8,12 @@ export interface BookmarkMediaItem {
   fileName?: string | null;
 }
 
+export interface BookmarkFolderMeta {
+  id: string;
+  name: string;
+  emoji: string | null;
+}
+
 export interface Bookmark {
   id: string;
   userId: string;
@@ -33,7 +39,7 @@ export interface Bookmark {
   swipedCount: number;
   readTimeMin: number;
   rightCount?: number;
-  folders?: { id: string; name: string; emoji: string | null }[];
+  folders?: BookmarkFolderMeta[];
   tags?: { id: string; name: string }[];
 }
 
@@ -50,7 +56,8 @@ function fileUrl(fileId: string | null | undefined): string | undefined {
 export function cardToBookmark(
   card: CardRow,
   attachments: AttachmentRow[],
-  links: CardLinkRow[]
+  links: CardLinkRow[],
+  folders: BookmarkFolderMeta[] = []
 ): Bookmark {
   const firstLink = links[0] ?? null;
 
@@ -103,5 +110,6 @@ export function cardToBookmark(
     domain: card.domain ?? undefined,
     swipedCount: 0,
     readTimeMin: 1,
+    ...(folders.length > 0 ? { folders } : {}),
   };
 }

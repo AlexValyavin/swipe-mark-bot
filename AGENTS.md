@@ -22,8 +22,12 @@ Mini App where users swipe through saved bookmarks. UI copy is Russian (`<html l
 3. `/api/auth` validates Telegram `initData` (HMAC-SHA256) and sets an HTTP-only session cookie (signed with `TELEGRAM_BOT_TOKEN`) holding the profile uuid; legacy `tg:<id>` cookies are accepted and translated via `profiles.telegram_id`. The frontend calls it once on startup; all other APIs (`/api/bookmarks`) read the user from that session (or a Supabase Auth Bearer token) and return 401 without it.
 
 ## Repositories (`src/lib/db/*`) — the only place with Supabase queries
-- `supabase.ts` — service-role client. `types.ts` — row types. `mappers.ts` — `cardToBookmark()` reconstructs the frontend `Bookmark` contract from relational rows (type/sourceType/status maps, `/api/file?fileId=` URLs, `forwardUrl` from `source_url`).
-- `cards.ts` — list/get/create/update media-group lookup, archived TTL deletes. `settings.ts` — `archive_ttl_hours`. `swipes.ts` — idempotency check, action logging, right-swipe counting. `folders.ts`, `tags.ts`, `pairing.ts` — future stages (folder/tag/pairing repos exist).
+- `supabase.ts` — service-role client. `types.ts` — row types. `mappers.ts` — `cardToBookmark()` reconstructs the frontend `Bookmark` contract from relational rows (type/sourceType/status maps, `/api/file?fileId=` URLs, `forwardUrl` from `source_url`, optional `folders` meta).
+- `cards.ts` — list/get/create/update media-group lookup, archived TTL deletes, `listForLibrary()` (statuses/folder/search/sort/cursor). `settings.ts` — `archive_ttl_hours`. `swipes.ts` — idempotency check, action logging, right-swipe counting. `folders.ts` — folder CRUD + counts + `setCardFolders` (scope-checked). `tags.ts`, `pairing.ts` — future stages (tag/pairing repos exist).
+
+## Frontend
+- Tabs: «Входящие» (swipe deck), «Библиотека» (`Library.tsx` — search, folder chips + counts, tabs В колоде/Позже/Архив, create/delete folder modals, card folder picker), «Архив».
+- Library API: `GET /api/library` (`tab`, `folderId`, `q`, `sort`, `cursor`), `GET/POST /api/folders`, `PATCH/DELETE /api/folders/[id]`, `POST /api/cards/[id]/folders`.
 
 ## Env vars (`.env.local`, none committed)
 - `TELEGRAM_BOT_TOKEN` — used by the webhook and auth HMAC

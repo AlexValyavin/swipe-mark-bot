@@ -136,15 +136,29 @@ export async function deleteAndArrangeCards(
 }
 
 export async function setCardFolders(
+  userId: string,
   cardId: string,
   folderIds: string[]
 ): Promise<void> {
   const db = getAdminDb();
+  // Только папки текущего пользователя (service_role обходит RLS — проверяем scope сами)
+  const uniqueIds = [...new Set(folderIds)];
+  let owned: string[] = [];
+  if (uniqueIds.length > 0) {
+    const { data, error } = await db
+      .from("folders")
+      .select("id")
+      .eq("user_id", userId)
+      .in("id", uniqueIds);
+    if (error) throw error;
+    owned = (data ?? []).map((f) => f.id);
+  }
+
   await db.from("card_folders").delete().eq("card_id", cardId);
-  if (folderIds.length > 0) {
+  if (owned.length > 0) {
     await db
       .from("card_folders")
-      .insert(folderIds.map((folder_id) => ({ card_id: cardId, folder_id })));
+      .insert(owned.map((folder_id) => ({ card_id: cardId, folder_id })));
   }
 }
 

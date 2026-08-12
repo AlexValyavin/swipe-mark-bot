@@ -123,3 +123,17 @@ test("type fallback: unknown source_type → primary_type", () => {
   // album маппится в photo
   assert.equal(b.type, "photo");
 });
+
+test("folders propagate to Bookmark when passed", () => {
+  const card = stubCard({ source_type: "link" });
+  const folders = [{ id: "f1", name: "Работа", emoji: "💼" }];
+  const b = cardToBookmark(card, [], [], folders);
+  assert.equal(b.folders?.[0]?.name, "Работа");
+  assert.equal(b.folders?.[0]?.emoji, "💼");
+});
+
+test("fields stay undefined when no folders passed", () => {
+  const card = stubCard({ source_type: "link" });
+  const b = cardToBookmark(card, [], []);
+  assert.equal(b.folders, undefined);
+});
