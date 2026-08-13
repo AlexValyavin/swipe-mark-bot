@@ -59,3 +59,6 @@ Mini App where users swipe through saved bookmarks. UI copy is Russian (`<html l
 - Migration script: idempotent via `migration_log.json` (mapping old→new ids), `--dry-run` flag, logs `processed/failed`, exits non-zero on failures.
 - Tailwind v4: no `tailwind.config` — styles are set up via `@import "tailwindcss"` in `src/app/globals.css`, which also holds Telegram theme vars and custom utilities.
 - Keep the `<!-- BEGIN/END:nextjs-agent-rules -->` block intact — `next dev` regenerates it; commit it with your changes.
+
+## Tech debt / backlog
+- **Автосортировщик библиотеки** (идея, не в ТЗ): кнопка в Library «✨ Автосортировка» → массовое распределение «Несортированного» по существующим папкам. База уже готова: `POST /api/cards/bulk-ai {scope:'unsorted'}` (≤30 карточек, синхронно). Нужно: (a) UI-кнопка + индикатор прогресса; (b) обход таймаута fetch/Vercel для больших библиотек (фоновый запуск через `after()` + поллинг статуса, либо порции с «продолжить»); (c) предупреждение о стоимости (N карточек = N запросов BYOK). Вариант Б: в настройках поле «кол-во папок» → ИИ предлагает N имён → создание с подтверждением пользователя (авто-создание папок сейчас запрещено намеренно) → раскладка. Хранилище: `user_settings.auto_sort_folder_count`.
