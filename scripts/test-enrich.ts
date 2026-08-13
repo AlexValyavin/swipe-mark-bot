@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { parseAiJson } from "../src/lib/ai/enrich";
+import { parseAiJson, normalizeFolderName } from "../src/lib/ai/enrich";
 
 test("parseAiJson: clean JSON object", () => {
   const s = parseAiJson(
@@ -59,4 +59,12 @@ test("parseAiJson: title capped at 120 chars", () => {
   const long = "а".repeat(200);
   const s = parseAiJson(JSON.stringify({ title: long, folder: null, confidence: 0.5 }));
   assert.equal(s.title!.length, 120);
+});
+
+test("normalizeFolderName: strips emoji prefix", () => {
+  assert.equal(normalizeFolderName("💼 win"), "win");
+  assert.equal(normalizeFolderName("🏋️ Нейросети"), "Нейросети");
+  assert.equal(normalizeFolderName("  💼   win  "), "win");
+  assert.equal(normalizeFolderName("win"), "win");
+  assert.equal(normalizeFolderName("Разные дела"), "Разные дела");
 });

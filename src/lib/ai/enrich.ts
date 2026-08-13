@@ -204,7 +204,9 @@ export async function enrichCard(userId: string, cardId: string): Promise<Enrich
   let applied = false;
   if (suggestion.folder) {
     try {
-      const folder = await getFolderByName(userId, suggestion.folder);
+      // Модель может вернуть "💼 win" (эмодзи из промпта) — нормализуем к чистому имени.
+      const folderName = normalizeFolderName(suggestion.folder);
+      const folder = await getFolderByName(userId, folderName);
       if (folder) {
         aiFolderId = folder.id;
         if (ctx.mode === "auto" && suggestion.confidence >= 0.7) {
@@ -247,6 +249,17 @@ export async function enrichCard(userId: string, cardId: string): Promise<Enrich
 
 async function addCardToFolder(cardId: string, folderId: string): Promise<void> {
   await getAdminDb().from("card_folders").upsert({ card_id: cardId, folder_id: folderId });
+}
+
+/**
+ * Убирает эмодзи-префикс ("💼 win" → "win") и лишние пробелы из имени папки,
+ * которое вернула модель.
+ */
+export function normalizeFolderName(raw: string): string {
+  return raw
+    .replace(/^\s*[\p{Extended_Pictographic}\p{Emoji_Component}\uFE0F\u200D]+\s*/u, "")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 /**

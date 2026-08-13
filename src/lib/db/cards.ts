@@ -47,7 +47,7 @@ export type CardLinkInput = {
 };
 
 async function loadBookmark(card: CardRow): Promise<Bookmark> {
-  const [attRes, linkRes, tagsMap] = await Promise.all([
+  const [attRes, linkRes, tagsMap, aiFolderNames] = await Promise.all([
     getAdminDb()
       .from("attachments")
       .select("*")
@@ -59,13 +59,15 @@ async function loadBookmark(card: CardRow): Promise<Bookmark> {
       .eq("card_id", card.id)
       .order("created_at", { ascending: true }),
     getTagsForCardIds([card.id]),
+    loadAiFolderNames([card]),
   ]);
   return cardToBookmark(
     card,
     (attRes.data ?? []) as AttachmentRow[],
     (linkRes.data ?? []) as CardLinkRow[],
     [],
-    tagsMap.get(card.id) ?? []
+    tagsMap.get(card.id) ?? [],
+    aiFolderNames.get(card.ai_folder_id ?? "") ?? undefined
   );
 }
 
@@ -108,6 +110,7 @@ export async function listForUser(userId: string): Promise<Bookmark[]> {
 
   const folderMap = await loadFoldersForCards(cardIds);
   const tagsMap = await getTagsForCardIds(cardIds);
+  const aiFolderNames = await loadAiFolderNames(cardsList);
 
   return cardsList.map((c) =>
     cardToBookmark(
@@ -115,7 +118,8 @@ export async function listForUser(userId: string): Promise<Bookmark[]> {
       atts.get(c.id) ?? [],
       links.get(c.id) ?? [],
       folderMap.get(c.id) ?? [],
-      tagsMap.get(c.id) ?? []
+      tagsMap.get(c.id) ?? [],
+      aiFolderNames.get(c.ai_folder_id ?? "") ?? undefined
     )
   );
 }
@@ -150,6 +154,22 @@ export async function loadFoldersForCards(cardIds: string[]): Promise<
     out.set(cf.card_id, list);
   }
   return out;
+}
+
+/** Резолвит имя папки по ai_folder_id карточек (подсказка AI может не быть в card_folders). */
+export async function loadAiFolderNames(
+  cards: CardRow[]
+): Promise<Map<string, string>> {
+  const ids = [...new Set(cards.map((c) => c.ai_folder_id).filter((id): id is string => !!id))];
+  if (ids.length === 0) return new Map();
+  const { data, error } = await getAdminDb()
+    .from("folders")
+    .select("id, name")
+    .in("id", ids);
+  assertNoError(error);
+  const map = new Map<string, string>();
+  for (const f of data ?? []) map.set(f.id, f.name);
+  return map;
 }
 
 export type LibraryQuery = {
@@ -273,11 +293,12 @@ export async function listForLibrary(
   const byId = new Map(cardsList.map((c) => [c.id, c]));
   const ordered = cardIds.map((id) => byId.get(id)).filter((c): c is CardRow => !!c);
 
-  const [attRes, linkRes, folderMap, tagsMap] = await Promise.all([
+  const [attRes, linkRes, folderMap, tagsMap, aiFolderNames] = await Promise.all([
     db.from("attachments").select("*").in("card_id", cardIds),
     db.from("card_links").select("*").in("card_id", cardIds),
     loadFoldersForCards(cardIds),
     getTagsForCardIds(cardIds),
+    loadAiFolderNames(ordered),
   ]);
   assertNoError(attRes.error);
   assertNoError(linkRes.error);
@@ -302,7 +323,8 @@ export async function listForLibrary(
       atts.get(c.id) ?? [],
       links.get(c.id) ?? [],
       folderMap.get(c.id) ?? [],
-      tagsMap.get(c.id) ?? []
+      tagsMap.get(c.id) ?? [],
+      aiFolderNames.get(c.ai_folder_id ?? "") ?? undefined
     )
   );
 }

@@ -64,7 +64,8 @@ export function cardToBookmark(
   attachments: AttachmentRow[],
   links: CardLinkRow[],
   folders: BookmarkFolderMeta[] = [],
-  tags: { id: string; name: string }[] = []
+  tags: { id: string; name: string }[] = [],
+  aiFolderName?: string | null
 ): Bookmark {
   const firstLink = links[0] ?? null;
 
@@ -125,9 +126,10 @@ export function cardToBookmark(
           aiTitle: card.ai_title ?? undefined,
           aiSummary: card.ai_summary ?? undefined,
           aiFolderId: card.ai_folder_id ?? undefined,
-          aiFolderName: card.ai_folder_id
-            ? folders.find((f) => f.id === card.ai_folder_id)?.name ?? undefined
-            : undefined,
+          aiFolderName:
+            card.ai_folder_id
+              ? (aiFolderName ?? folders.find((f) => f.id === card.ai_folder_id)?.name) ?? undefined
+              : undefined,
           aiConfidence: card.ai_confidence ?? undefined,
         }
       : {}),
