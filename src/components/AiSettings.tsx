@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTelegram } from "@/components/TelegramProvider";
-import { Eye, EyeOff, Loader2, RefreshCw, Check } from "lucide-react";
+import { Eye, EyeOff, Loader2, RefreshCw, Check, Trash2 } from "lucide-react";
 
 export type AiMode = "off" | "suggest" | "auto";
 
@@ -221,9 +221,12 @@ export function AiSettings() {
                 void save({ customBaseUrl: customUrl });
               }
             }}
-            placeholder="https://…"
+            placeholder="https://host:port"
             className="mt-1.5 w-full rounded-xl bg-surface px-4 py-3 text-sm text-text placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-accent"
           />
+          <p className="mt-1 text-xs text-muted">
+            Например: http://localhost:11434 (порт — часть URL, без протокола подставится http://)
+          </p>
         </div>
       )}
 
@@ -339,7 +342,17 @@ export function AiSettings() {
           )}
         </div>
         {state.hasKey && (
-          <p className="mt-1 text-xs text-success">Ключ сохранён (зашифрован).</p>
+          <div className="mt-2 flex items-center justify-between">
+            <p className="text-xs text-success">Ключ сохранён (зашифрован).</p>
+            <button
+              onClick={() => void save({ clearKey: true })}
+              disabled={saving}
+              className="inline-flex items-center gap-1 rounded-lg bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+            >
+              <Trash2 className="size-3.5" />
+              Удалить
+            </button>
+          </div>
         )}
       </div>
 

@@ -15,6 +15,7 @@ const PROVIDERS: AiProvider[] = ["openrouter", "mistral", "openai", "custom"];
 const putSchema = z.object({
   provider: z.enum(["openrouter", "mistral", "openai", "custom"]).optional(),
   key: z.string().min(1).max(1000).optional(),
+  clearKey: z.boolean().optional(),
   model: z.string().min(1).max(200).optional(),
   customBaseUrl: z.string().max(500).optional(),
   mode: z.enum(["off", "suggest", "auto"]).optional(),
@@ -76,7 +77,7 @@ export async function PUT(req: NextRequest) {
 
     const patch: {
       ai_provider?: string;
-      ai_key_enc?: string;
+      ai_key_enc?: string | null;
       ai_model?: string;
       ai_custom_base_url?: string | null;
       ai_mode?: string;
@@ -88,10 +89,17 @@ export async function PUT(req: NextRequest) {
       patch.ai_key_enc = encryptSecret(body.data.key);
     }
 
+    if (body.data.clearKey) {
+      patch.ai_key_enc = null;
+      patch.ai_mode = "off";
+    }
+
     if (body.data.model !== undefined) patch.ai_model = body.data.model;
 
     if (body.data.customBaseUrl !== undefined) {
-      patch.ai_custom_base_url = body.data.customBaseUrl.trim() || null;
+      let url = body.data.customBaseUrl.trim();
+      if (url && !/^https?:\/\//i.test(url)) url = `http://${url}`;
+      patch.ai_custom_base_url = url || null;
     }
 
     if (body.data.mode !== undefined) patch.ai_mode = body.data.mode;

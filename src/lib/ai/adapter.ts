@@ -47,9 +47,15 @@ export type ChatCompletionResult = {
   usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number };
 };
 
+function normalizeBaseUrl(url: string | undefined): string {
+  const trimmed = (url ?? "").trim().replace(/\/+$/, "");
+  if (!trimmed) return "";
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+}
+
 function resolveEndpoint(provider: AiProvider, baseUrl?: string): string {
   if (provider === "custom") {
-    const b = (baseUrl ?? "").trim().replace(/\/+$/, "");
+    const b = normalizeBaseUrl(baseUrl);
     if (!b) throw new AiError("network", "custom_base_url is required");
     return `${b}/chat/completions`;
   }
@@ -139,7 +145,7 @@ export async function chatCompletion(
 
 function resolveModelsEndpoint(provider: AiProvider, baseUrl?: string): string {
   if (provider === "custom") {
-    const b = (baseUrl ?? "").trim().replace(/\/+$/, "");
+    const b = normalizeBaseUrl(baseUrl);
     if (!b) throw new AiError("network", "custom_base_url is required");
     return `${b}/models`;
   }
