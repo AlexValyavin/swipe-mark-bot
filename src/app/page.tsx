@@ -12,6 +12,7 @@ import {
   Trash2,
   X,
   LibraryBig,
+  Settings,
 } from "lucide-react";
 import { useTelegram } from "@/components/TelegramProvider";
 import { SwipeDeck } from "@/components/SwipeDeck";
@@ -19,8 +20,9 @@ import type { SwipeDirection } from "@/components/BookmarkCard";
 import { getOpenTarget } from "@/lib/openTarget";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 import { Library } from "@/components/Library";
+import { AiSettings } from "@/components/AiSettings";
 
-type Tab = "inbox" | "archive" | "library";
+type Tab = "inbox" | "archive" | "library" | "settings";
 
 function groupByDay(list: Bookmark[]) {
   const now = new Date();
@@ -551,6 +553,17 @@ export default function Home() {
               onReturnToDeck={returnToDeck}
               refreshSignal={librarySignal}
             />
+          ) : tab === "settings" ? (
+            <motion.div
+              key="settings"
+              initial={{ opacity: 0, x: 16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 16 }}
+              transition={{ duration: 0.18 }}
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              <AiSettings />
+            </motion.div>
           ) : null}
         </AnimatePresence>
       </div>
@@ -608,6 +621,20 @@ export default function Home() {
             )}
           </div>
           <span className="text-[10px] font-medium">Архив</span>
+        </button>
+        <button
+          onClick={() => {
+            telegram?.haptic.selection();
+            setTab("settings");
+          }}
+          className={`relative flex flex-col items-center gap-0.5 px-6 py-1 transition-colors ${
+            tab === "settings" ? "text-accent" : "text-muted"
+          }`}
+        >
+          <div className="relative">
+            <Settings className="size-6" />
+          </div>
+          <span className="text-[10px] font-medium">Настройки</span>
         </button>
       </nav>
 

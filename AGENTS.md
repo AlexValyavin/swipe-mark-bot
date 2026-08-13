@@ -31,6 +31,14 @@ Mini App where users swipe through saved bookmarks. UI copy is Russian (`<html l
 - `tags.ts` — bucket: `.findOrCreateTag` (`lower+trim+схлоп пробелов`, race-safe 23505), `.listTagsByUser` (join `card_tags`, топ-50 по частоте), `.addCardTags` (upsert+sвязи), `.setCardTags` (замена связей + чистка orphan), `.removeCardTag`, `.getTagsForCardIds`.
 - `pairing.ts` — future stage (tag/pairing repos exist).
 
+## AI (BYOK, этап 3)
+- `src/lib/crypto.ts` — AES-256-GCM шифрование ключей: формат `enc:v1:<iv>:<tag>:<ct>` (base64url), ключ выводится из `AI_KEY_SECRET` через SHA-256, `maskKey()` только последние 4 символа.
+- `src/lib/ai/adapter.ts` — единый chat-completions адаптер: openrouter/mistral/openai/custom base url, timeout 8с, ошибки `AiError {kind: auth|rate|timeout|network|parse}`, дефолт-модели на провайдер.
+- API: `GET/PUT /api/settings/ai` (zod-валидация, возвращает `{provider, model, mode, hasKey, keyMask, customBaseUrl}`, ключ никогда не отдаётся открытым), `POST /api/settings/ai/test` (rate limit 5/мин in-memory, `{ok, model, latencyMs, error?}`).
+- `src/lib/db/settings.ts` — `getAiSettings`/`upsertAiSettings` (user_settings: ai_provider/ai_key_enc/ai_model/ai_custom_base_url/ai_mode).
+- UI: `src/components/AiSettings.tsx` — вкладка «Настройки» в `page.tsx` (селект провайдера, ключ password+👁, модель авто/вручную, Проверить, тумблер off/suggest/auto).
+- Тесты: `npm run test:crypto` (roundtrip, маскирование, тампер-детект).
+
 ## Frontend
 - Tabs: «Входящие» (swipe deck), «Библиотека» (`Library.tsx` — search, folder chips + counts + tag filter «Теги ▾» (мультивыбор OR), tabs В колоде/Позже/Архив, create/delete folder modals, folder picker, tag picker с чипами/инпут/автокомплит, чипы тегов на карточке (≤3)), «Архив».
 - Library API: `GET /api/library` (`tab`, `folderId`, `q`, `tags=a,b`, `sort`, `cursor`), `GET /api/tags` (`q`), `POST /api/cards/[id]/tags` (`names`), `DELETE /api/cards/[id]/tags/[tagId]`, `GET/POST /api/folders`, `PATCH/DELETE /api/folders/[id]`, `POST /api/cards/[id]/folders`.
