@@ -41,6 +41,12 @@ export interface Bookmark {
   rightCount?: number;
   folders?: BookmarkFolderMeta[];
   tags?: { id: string; name: string }[];
+  aiTitle?: string | null;
+  aiSummary?: string | null;
+  aiStatus?: string | null;
+  aiFolderId?: string | null;
+  aiFolderName?: string | null;
+  aiConfidence?: number | null;
 }
 
 function fileUrl(fileId: string | null | undefined): string | undefined {
@@ -113,5 +119,17 @@ export function cardToBookmark(
     readTimeMin: 1,
     ...(folders.length > 0 ? { folders } : {}),
     ...(tags.length > 0 ? { tags } : {}),
+    ...(card.ai_status && card.ai_status !== "none"
+      ? {
+          aiStatus: card.ai_status,
+          aiTitle: card.ai_title ?? undefined,
+          aiSummary: card.ai_summary ?? undefined,
+          aiFolderId: card.ai_folder_id ?? undefined,
+          aiFolderName: card.ai_folder_id
+            ? folders.find((f) => f.id === card.ai_folder_id)?.name ?? undefined
+            : undefined,
+          aiConfidence: card.ai_confidence ?? undefined,
+        }
+      : {}),
   };
 }

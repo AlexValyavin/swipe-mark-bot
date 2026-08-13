@@ -13,6 +13,19 @@ type Counts = {
   unsorted: number;
 };
 
+async function getUnsortedCount(userId: string): Promise<number> {
+  const db = getAdminDb();
+  const { data: inFolder } = await db.from("card_folders").select("card_id");
+  const excluded = new Set((inFolder ?? []).map((r) => r.card_id));
+  const { count, error } = await db
+    .from("cards")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .in("status", ["new", "later"]);
+  if (error) return 0;
+  return Math.max((count ?? 0) - excluded.size, 0);
+}
+
 async function getCounts(userId: string): Promise<Counts> {
   const db = getAdminDb();
   // RPC из схемы этапа 0; если не создана — считаем в коде.
@@ -23,7 +36,7 @@ async function getCounts(userId: string): Promise<Counts> {
         inDeck: Number(data.in_deck ?? 0),
         readLater: Number(data.read_later ?? 0),
         archived: Number(data.archived ?? 0),
-        unsorted: Number(data.unsorted ?? 0),
+        unsorted: await getUnsortedCount(userId),
       };
     }
   } catch {
@@ -49,7 +62,7 @@ async function getCounts(userId: string): Promise<Counts> {
     inDeck: inDeck ?? 0,
     readLater: readLater ?? 0,
     archived: archived ?? 0,
-    unsorted: 0,
+    unsorted: await getUnsortedCount(userId),
   };
 }
 

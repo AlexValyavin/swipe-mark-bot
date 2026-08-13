@@ -2,7 +2,7 @@
 
 import { motion, PanInfo, useMotionValue, useTransform, animate } from "framer-motion";
 import { useRef, useState } from "react";
-import { Play } from "lucide-react";
+import { Play, Sparkles } from "lucide-react";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 import { useTelegram } from "@/components/TelegramProvider";
 
@@ -176,6 +176,12 @@ export function BookmarkCard({
           <p className="mt-2 text-sm text-muted line-clamp-3">
             {bookmark.description}
           </p>
+        )}
+        {bookmark.aiFolderName && bookmark.aiStatus === "done" && (
+          <div className="mt-2 inline-flex items-center gap-1 rounded-lg bg-accent/15 px-2 py-1 text-xs font-medium text-accent">
+            <Sparkles className="size-3" />
+            AI: {bookmark.aiFolderName}
+          </div>
         )}
         <div className="mt-auto flex items-center gap-1.5 pt-4">
           {favicon ? (

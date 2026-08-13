@@ -16,6 +16,8 @@ import {
   Tag,
   ChevronDown,
   Check,
+  Sparkles,
+  Inbox,
 } from "lucide-react";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 import { useTelegram } from "@/components/TelegramProvider";
@@ -49,6 +51,7 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
   const [availableTags, setAvailableTags] = useState<{ id: string; name: string; count: number }[]>([]);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [folders, setFolders] = useState<FolderMeta[]>([]);
+  const [unsortedCount, setUnsortedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,6 +101,7 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
           sortOrder: f.sortOrder,
         }))
       );
+      setUnsortedCount(Number(data.counts?.unsorted ?? 0));
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка загрузки");
@@ -221,6 +225,22 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
     await Promise.all([load(), loadTags()]);
   };
 
+  const acceptAi = async (card: Bookmark) => {
+    await fetch(`/api/cards/${card.id}/ai-accept`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "folder" }),
+    });
+    telegram?.haptic.notification("success");
+    await load();
+  };
+
+  const dismissAi = async (card: Bookmark) => {
+    await fetch(`/api/cards/${card.id}/ai-dismiss`, { method: "POST" });
+    telegram?.haptic.selection();
+    await load();
+  };
+
   const tabs: { key: LibraryTab; label: string }[] = [
     { key: "deck", label: "В колоде" },
     { key: "later", label: "Открыть позже" },
@@ -282,6 +302,21 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
 
       {/* Folder chips */}
       <div className="flex items-center gap-1.5 overflow-x-auto px-5 py-1.5 hide-scrollbar">
+        <button
+          onClick={() => {
+            telegram?.haptic.selection();
+            setFolderId(folderId === "unsorted" ? null : "unsorted");
+          }}
+          className={`flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
+            folderId === "unsorted"
+              ? "bg-accent text-accent-text"
+              : "bg-surface text-muted hover:text-text"
+          }`}
+        >
+          <Inbox className="size-3.5" />
+          <span>Несортированное</span>
+          <span className="opacity-60">{unsortedCount}</span>
+        </button>
         {activeFolders.map((f) => (
           <button
             key={f.id}
@@ -446,6 +481,35 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
                         {b.tags.length > 3 && (
                           <span className="text-[10px] text-muted">+{b.tags.length - 3}</span>
                         )}
+                      </div>
+                    )}
+                    {b.aiFolderName && b.aiStatus === "done" && (
+                      <div className="mt-0.5 flex items-center gap-1">
+                        <span className="flex items-center gap-1 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                          <Sparkles className="size-3" />
+                          AI: {b.aiFolderName}
+                          {typeof b.aiConfidence === "number" && (
+                            <span className="opacity-60">
+                              {Math.round(b.aiConfidence * 100)}%
+                            </span>
+                          )}
+                        </span>
+                        <button
+                          onClick={() => void acceptAi(b)}
+                          aria-label="Принять подсказку AI"
+                          title="Принять"
+                          className="flex size-5 items-center justify-center rounded-full bg-success/20 text-success active:scale-90"
+                        >
+                          <Check className="size-3" />
+                        </button>
+                        <button
+                          onClick={() => void dismissAi(b)}
+                          aria-label="Отклонить подсказку AI"
+                          title="Отклонить"
+                          className="flex size-5 items-center justify-center rounded-full bg-bg text-muted active:scale-90"
+                        >
+                          <X className="size-3" />
+                        </button>
                       </div>
                     )}
                   </div>

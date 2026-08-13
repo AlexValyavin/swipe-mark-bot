@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import {
   appendAttachment,
   createCard,
@@ -177,6 +178,7 @@ export async function POST(req: NextRequest) {
         },
         [attachment]
       );
+      kickEnrich(userId, albumCardId);
       await reply(`Сохранено ✅ (#${albumCardId})`);
       return NextResponse.json({ ok: true });
     }
@@ -202,6 +204,7 @@ export async function POST(req: NextRequest) {
       links
     );
     if (cardId) {
+      kickEnrich(userId, cardId);
       await reply(`Сохранено ✅ (#${cardId})`);
     }
   } catch (e) {
@@ -310,4 +313,22 @@ function domainOf(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Запускает AI-обогащение в фоне (после ответа Telegram).
+ * Любые ошибки глотаем — карточка и так сохранена.
+ */
+function kickEnrich(userId: string, cardId: string): void {
+  after(async () => {
+    try {
+      const { enrichCard } = await import("@/lib/ai/enrich");
+      const outcome = await enrichCard(userId, cardId);
+      if (outcome.status === "failed") {
+        console.warn(`AI enrich failed for card ${cardId}: ${outcome.reason}`);
+      }
+    } catch (e) {
+      console.error(`AI enrich error for card ${cardId}:`, e);
+    }
+  });
 }

@@ -187,7 +187,15 @@ export async function listForLibrary(
     else query = query.gt("created_at", cursor);
   }
 
-  if (q.folderId) {
+  if (q.folderId === "unsorted") {
+    const { data: inAnyFolder } = await db.from("card_folders").select("card_id");
+    const excluded = new Set((inAnyFolder ?? []).map((r) => r.card_id));
+    if (excluded.size === 0) {
+      // no-op — фильтрации не требуется
+    } else {
+      query = query.not("id", "in", `(${[...excluded].join(",")})`);
+    }
+  } else if (q.folderId) {
     query = query.in(
       "id",
       (await db.from("card_folders").select("card_id").eq("folder_id", q.folderId))
