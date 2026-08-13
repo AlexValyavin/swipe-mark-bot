@@ -569,13 +569,13 @@ export default function Home() {
       </div>
 
       {/* Bottom navigation */}
-      <nav className="flex items-center justify-around border-t border-line bg-surface/50 px-6 py-2.5">
+      <nav className="flex items-stretch border-t border-line bg-surface/50 px-2 py-2.5">
         <button
           onClick={() => {
             telegram?.haptic.selection();
             setTab("inbox");
           }}
-          className={`relative flex flex-col items-center gap-0.5 px-6 py-1 transition-colors ${
+          className={`relative flex min-w-0 flex-1 flex-col items-center gap-0.5 py-1 transition-colors ${
             tab === "inbox" ? "text-accent" : "text-muted"
           }`}
         >
@@ -594,7 +594,7 @@ export default function Home() {
             telegram?.haptic.selection();
             setTab("library");
           }}
-          className={`relative flex flex-col items-center gap-0.5 px-6 py-1 transition-colors ${
+          className={`relative flex min-w-0 flex-1 flex-col items-center gap-0.5 py-1 transition-colors ${
             tab === "library" ? "text-accent" : "text-muted"
           }`}
         >
@@ -608,7 +608,7 @@ export default function Home() {
             telegram?.haptic.selection();
             setTab("archive");
           }}
-          className={`relative flex flex-col items-center gap-0.5 px-6 py-1 transition-colors ${
+          className={`relative flex min-w-0 flex-1 flex-col items-center gap-0.5 py-1 transition-colors ${
             tab === "archive" ? "text-accent" : "text-muted"
           }`}
         >
@@ -627,7 +627,7 @@ export default function Home() {
             telegram?.haptic.selection();
             setTab("settings");
           }}
-          className={`relative flex flex-col items-center gap-0.5 px-6 py-1 transition-colors ${
+          className={`relative flex min-w-0 flex-1 flex-col items-center gap-0.5 py-1 transition-colors ${
             tab === "settings" ? "text-accent" : "text-muted"
           }`}
         >

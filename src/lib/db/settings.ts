@@ -54,7 +54,20 @@ export async function getAiSettings(userId: string): Promise<AiSettings | null> 
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
-  return data as unknown as AiSettings;
+  const row = data as {
+    ai_provider: string | null;
+    ai_key_enc: string | null;
+    ai_model: string | null;
+    ai_custom_base_url: string | null;
+    ai_mode: string;
+  };
+  return {
+    provider: row.ai_provider,
+    ai_key_enc: row.ai_key_enc,
+    ai_model: row.ai_model,
+    ai_custom_base_url: row.ai_custom_base_url,
+    ai_mode: row.ai_mode,
+  };
 }
 
 export async function upsertAiSettings(
