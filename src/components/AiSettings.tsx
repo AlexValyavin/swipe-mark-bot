@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTelegram } from "@/components/TelegramProvider";
-import { Eye, EyeOff, Loader2, RefreshCw } from "lucide-react";
+import { Eye, EyeOff, Loader2, RefreshCw, Check } from "lucide-react";
 
 export type AiMode = "off" | "suggest" | "auto";
 
@@ -46,6 +46,9 @@ export function AiSettings() {
   const [newKey, setNewKey] = useState("");
   const [manualModel, setManualModel] = useState(false);
   const [customUrl, setCustomUrl] = useState("");
+  const [models, setModels] = useState<string[] | null>(null);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsError, setModelsError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{
     ok: boolean;
     latencyMs?: number;
@@ -153,6 +156,26 @@ export function AiSettings() {
     }
   };
 
+  const loadModels = async () => {
+    setModelsLoading(true);
+    setModelsError(null);
+    try {
+      const res = await fetch("/api/settings/ai/models");
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setModelsError(data.error || "Не удалось загрузить модели");
+        setModels(null);
+        return;
+      }
+      setModels((data.models as string[]) ?? []);
+    } catch {
+      setModelsError("Ошибка сети");
+      setModels(null);
+    } finally {
+      setModelsLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
@@ -221,15 +244,60 @@ export function AiSettings() {
           </button>
         </div>
         {manualModel ? (
-          <input
-            value={state.model}
-            onChange={(e) => setState((s) => ({ ...s, model: e.target.value }))}
-            onBlur={() => {
-              if (state.model.trim()) void save({ model: state.model.trim() });
-            }}
-            placeholder="model-id"
-            className="mt-1.5 w-full rounded-xl bg-surface px-4 py-3 text-sm text-text placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-accent"
-          />
+          <div className="mt-1.5">
+            <div className="flex items-center gap-2">
+              <input
+                value={state.model}
+                onChange={(e) => setState((s) => ({ ...s, model: e.target.value }))}
+                onBlur={() => {
+                  if (state.model.trim()) void save({ model: state.model.trim() });
+                }}
+                placeholder="model-id"
+                className="w-full rounded-xl bg-surface px-4 py-3 text-sm text-text placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+              <button
+                onClick={() => void loadModels()}
+                disabled={modelsLoading || !state.hasKey}
+                title="Загрузить список моделей"
+                aria-label="Загрузить модели"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent disabled:opacity-40"
+              >
+                <RefreshCw className={`size-4 ${modelsLoading ? "animate-spin" : ""}`} />
+              </button>
+            </div>
+
+            {models && models.length > 0 ? (
+              <div className="mt-2 flex max-h-44 flex-col gap-1 overflow-y-auto hide-scrollbar">
+                {models.map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => {
+                      telegram?.haptic.selection();
+                      setState((s) => ({ ...s, model: m }));
+                      void save({ model: m });
+                    }}
+                    className={`flex items-center gap-2 rounded-lg bg-bg px-3 py-2 text-left text-sm transition-colors ${
+                      state.model === m ? "text-accent" : "text-text hover:bg-line"
+                    }`}
+                  >
+                    <span className="flex-1 truncate">{m}</span>
+                    {state.model === m && <Check className="size-4 shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  onClick={() => void loadModels()}
+                  disabled={modelsLoading || !state.hasKey}
+                  className="text-xs text-accent disabled:opacity-40"
+                >
+                  {modelsLoading ? "Загрузка…" : modelsError ? "Повторить загрузку моделей" : "Загрузить список моделей"}
+                </button>
+                {modelsError && <span className="truncate text-xs text-red-400">{modelsError}</span>}
+              </div>
+            )}
+          </div>
         ) : (
           <div className="mt-1.5 rounded-xl bg-surface px-4 py-3 text-sm text-text">
             {state.model || "Авто (дефолт провайдера)"}

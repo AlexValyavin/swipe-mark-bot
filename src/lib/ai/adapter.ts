@@ -136,3 +136,60 @@ export async function chatCompletion(
       : undefined,
   };
 }
+
+function resolveModelsEndpoint(provider: AiProvider, baseUrl?: string): string {
+  if (provider === "custom") {
+    const b = (baseUrl ?? "").trim().replace(/\/+$/, "");
+    if (!b) throw new AiError("network", "custom_base_url is required");
+    return `${b}/models`;
+  }
+  return `${PROVIDER_BASE_URLS[provider]}/models`;
+}
+
+/**
+ * Загружает список моделей провайдера через GET /models (OpenAI-совместимый).
+ * Возвращает отсортированные по алфавиту id, либо null если провайдер не отдал список.
+ */
+export async function listModels(
+  provider: AiProvider,
+  apiKey: string,
+  baseUrl?: string
+): Promise<string[]> {
+  const timeoutMs = 8000;
+  const endpoint = resolveModelsEndpoint(provider, baseUrl);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let res: Response;
+  try {
+    res = await fetch(endpoint, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: controller.signal,
+    });
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new AiError("timeout", "Request timed out");
+    }
+    throw new AiError("network", `Network error: ${e instanceof Error ? e.message : e}`);
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const body = (await res.json()) as { error?: { message?: string } };
+      detail = body?.error?.message ?? "";
+    } catch {
+      // не JSON
+    }
+    throw new AiError(mapError(res.status), `HTTP ${res.status}${detail ? `: ${detail}` : ""}`);
+  }
+
+  const data = (await res.json()) as { data?: { id?: string }[] } | null;
+  const ids = (data?.data ?? [])
+    .map((m) => m.id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  return [...new Set(ids)].sort((a, b) => a.localeCompare(b));
+}
