@@ -14,7 +14,7 @@ Mini App where users swipe through saved bookmarks. UI copy is Russian (`<html l
 
 ## Commands
 - `npm run dev` — dev server. Open in Telegram or use the fallback landing page (rendered when `window.Telegram.WebApp` is absent).
-- `npm run lint` — ESLint only; there is no typecheck or test script. Typecheck manually with `npx tsc --noEmit`. Mapping unit tests: `npx tsx --test scripts/test-mappers.ts`. AI-enrich parsing tests: `npx tsx --test scripts/test-enrich.ts`.
+- `npm run lint` — ESLint only; there is no typecheck or test script. Typecheck manually with `npx tsc --noEmit`. Mapping unit tests: `npx tsx --test scripts/test-mappers.ts`. AI-enrich parsing tests: `npx tsx --test scripts/test-enrich.ts`. Pairing code tests: `npx tsx --test scripts/test-pairing.ts`.
 
 ## Data flow
 1. User sends a link/photo/video/forward to @SwipeMarkBot → Telegram POSTs to `/api/webhook` → profile is resolved via `getOrCreateProfileByTelegramId`, card saved to Supabase `cards` (single row per message), media into `attachments`, URLs into `card_links`. Albums (`media_group_id`) are merged into one card by lookups on `media_group_id + user_id` (`findCardIdByMediaGroup`) and append to `attachments`; the last photo's caption is applied. Forwards store `source_type='forwarded'`, `source_chat_id`, `source_message_id` and `source_url` (`https://t.me/<username>/<messageId>` for public, `https://t.me/c/<id>/<messageId>` for private chats). Title is derived via `deriveTitle`: first meaningful text line → caption → auto-label (`Фото`/`Видео`/`Документ`/`Ссылка`/`Сохранённое сообщение`), capped at 120 chars. Media is served through `/api/file` (accepts `?fileId=` resolved via getFile, or the legacy `?path=`), so the bot token never reaches the client.
@@ -44,8 +44,15 @@ Mini App where users swipe through saved bookmarks. UI copy is Russian (`<html l
 - Tabs: «Входящие» (swipe deck), «Библиотека» (`Library.tsx` — search, folder chips + counts + tag filter «Теги ▾» (мультивыбор OR), tabs В колоде/Позже/Архив, create/delete folder modals, folder picker, tag picker с чипами/инпут/автокомплит, чипы тегов на карточке (≤3)), «Архив».
 - Library API: `GET /api/library` (`tab`, `folderId`, `q`, `tags=a,b`, `sort`, `cursor`), `GET /api/tags` (`q`), `POST /api/cards/[id]/tags` (`names`), `DELETE /api/cards/[id]/tags/[tagId]`, `GET/POST /api/folders`, `PATCH/DELETE /api/folders/[id]`, `POST /api/cards/[id]/folders`.
 
+## Pairing (этап 5)
+- `src/lib/db/pairing.ts` — `generateCode()` (безопасный алфавит без O/0/I/1, 8 символов), `generatePairingCode` (инвалидирует старые, TTL 10 мин), `consumePairingCode` (null при невалидном/просроченном/использованном), `linkTelegram` (scope-check: TG не должен быть у другого профиля → 23505), `unlinkTelegram`.
+- API: `POST /api/pairing/generate` → `{code, expiresAt, deepLink, qr}` (deepLink = `https://t.me/<BOT_USERNAME>?start=<code>`), `GET /api/pairing/status` → `{linked, telegramUsername, linkedAt, code, expiresAt}` (активный код, если есть), `POST /api/pairing/unlink`.
+- Бот: `/start <code>` в `/api/webhook` → проверки (нет кода / недействителен / уже привязан у себя / 23505 занят другим) → `profiles.telegram_id` + `markCodeUsed`; `/unlink` → очистка. Ответы через Telegram sendMessage (дружелюбные).
+- UI: `src/components/PairingSettings.tsx` вверху вкладки «Настройки» — не привязан (кнопка + код + копировать + открыть TG + QR `qrcode.react` + таймер TTL + polling 3 с) / привязан (@username, дата, Отвязать). Env: `BOT_USERNAME` (сервер) и `NEXT_PUBLIC_BOT_USERNAME` (клиент для QR/deep link).
+
 ## Env vars (`.env.local`, none committed)
 - `TELEGRAM_BOT_TOKEN` — used by the webhook and auth HMAC
+- `BOT_USERNAME` / `NEXT_PUBLIC_BOT_USERNAME` — bot username without @, used for pairing deep links (`https://t.me/<username>?start=<code>`) and QR
 - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — server DB access (service role; never exposed to client)
 - `SUPABASE_ANON_KEY` — used only server-side to verify Bearer auth tokens
 - `FIREBASE_SERVICE_ACCOUNT_KEY` — legacy, only for `scripts/migrate-firestore.ts` (inline JSON string, parsed with `JSON.parse`)

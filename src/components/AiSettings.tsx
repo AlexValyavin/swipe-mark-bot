@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTelegram } from "@/components/TelegramProvider";
+import { PairingSettings } from "@/components/PairingSettings";
 import { Eye, EyeOff, Loader2, RefreshCw, Check, Trash2 } from "lucide-react";
 
 export type AiMode = "off" | "suggest" | "auto";
@@ -186,8 +187,11 @@ export function AiSettings() {
 
   return (
     <div className="flex-1 overflow-y-auto p-5 hide-scrollbar">
+      {/* Telegram pairing */}
+      <PairingSettings />
+
       {/* Provider */}
-      <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
+      <h2 className="mt-6 text-xs font-semibold uppercase tracking-wider text-muted">
         AI-провайдер
       </h2>
       <div className="mt-2 grid grid-cols-2 gap-2">

@@ -5,6 +5,15 @@ const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 8;
 const CODE_TTL_MS = 10 * 60 * 1000;
 
+/** Генерирует код из безопасного алфавита (без O/0/I/1 и неоднозначных символов). */
+export function generateCode(): string {
+  let code = "";
+  for (let i = 0; i < CODE_LENGTH; i++) {
+    code += CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)];
+  }
+  return code;
+}
+
 export async function getActivePairingCode(userId: string): Promise<{
   code: string;
   expiresAt: string;
@@ -34,10 +43,7 @@ export async function generatePairingCode(userId: string): Promise<{
     .eq("user_id", userId)
     .is("used_at", null);
 
-  let code = "";
-  for (let i = 0; i < CODE_LENGTH; i++) {
-    code += CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)];
-  }
+  const code = generateCode();
 
   const expiresAt = new Date(Date.now() + CODE_TTL_MS);
   const { error } = await db.from("pairing_codes").insert({

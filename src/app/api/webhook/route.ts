@@ -88,6 +88,21 @@ export async function POST(req: NextRequest) {
   };
 
   try {
+    const text0 = (message.text || "").trim();
+
+    // Привязка Telegram-аккаунта: /start <code>
+    const startMatch = text0.match(/^\/start(?:\s+([A-Z0-9]{8}))?$/i);
+    if (startMatch) {
+      await handleStart(fromId, startMatch[1] ?? null, reply);
+      return NextResponse.json({ ok: true });
+    }
+
+    // Отвязка: /unlink
+    if (text0.toLowerCase() === "/unlink") {
+      await handleUnlink(fromId, reply);
+      return NextResponse.json({ ok: true });
+    }
+
     const profile = await getOrCreateProfileByTelegramId(fromId);
     const userId = profile.id;
 
@@ -331,4 +346,71 @@ function kickEnrich(userId: string, cardId: string): void {
       console.error(`AI enrich error for card ${cardId}:`, e);
     }
   });
+}
+
+/**
+ * Обрабатывает /start <code> — привязка Telegram-аккаунта к профилю SwipeMark.
+ * Все проверки с дружелюбными ответами; ничего не падает в 500.
+ */
+async function handleStart(
+  fromId: number,
+  code: string | null,
+  reply: (text: string) => Promise<void>
+): Promise<void> {
+  const { consumePairingCode, markCodeUsed, linkTelegram } = await import(
+    "@/lib/db/pairing"
+  );
+  const { getOrCreateProfileByTelegramId } = await import(
+    "@/lib/db/profiles"
+  );
+
+  if (!code) {
+    await reply("Привет! Отправь код из приложения SwipeMark, например: /start ABCDEFGH");
+    return;
+  }
+
+  const userId = await consumePairingCode(code);
+  if (!userId) {
+    await reply("❌ Код недействителен или истёк. Попробуй сгенерировать новый в приложении.");
+    return;
+  }
+
+  const profile = await getOrCreateProfileByTelegramId(fromId);
+  if (profile.telegram_id !== null) {
+    await reply("ℹ️ Твой Telegram уже привязан к аккаунту SwipeMark. Для смены — сначала отвяжи в приложении.");
+    return;
+  }
+
+  try {
+    await linkTelegram(userId, fromId);
+    await markCodeUsed(code);
+    await reply("Готово ✅ Telegram привязан к твоему аккаунту SwipeMark!");
+  } catch (e) {
+    if ((e as { code?: string }).code === "23505") {
+      await reply("❌ Этот Telegram уже привязан к другому аккаунту. Сначала отвяжи его там.");
+    } else {
+      console.error("Pairing /start error:", e);
+      await reply("❌ Не удалось привязать аккаунт. Попробуй ещё раз.");
+    }
+  }
+}
+
+/**
+ * Обрабатывает /unlink — отвязывает Telegram от текущего профиля.
+ */
+async function handleUnlink(
+  fromId: number,
+  reply: (text: string) => Promise<void>
+): Promise<void> {
+  const { unlinkTelegram } = await import("@/lib/db/pairing");
+  const { getProfileByTelegramId } = await import("@/lib/db/profiles");
+
+  const profile = await getProfileByTelegramId(fromId);
+  if (!profile || profile.telegram_id === null) {
+    await reply("ℹ️ Твой Telegram не привязан к SwipeMark.");
+    return;
+  }
+
+  await unlinkTelegram(profile.id);
+  await reply("Готово ✅ Отвязал Telegram от SwipeMark.");
 }
