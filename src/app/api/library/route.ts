@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
-import { listForLibrary, type LibraryQuery } from "@/lib/db/cards";
+import { listForLibrary, getCountsForUser, type LibraryQuery } from "@/lib/db/cards";
 import { listFolders } from "@/lib/db/folders";
 import { getAdminDb } from "@/lib/db/supabase";
 

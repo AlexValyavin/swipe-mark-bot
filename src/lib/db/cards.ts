@@ -456,6 +456,102 @@ export async function updateCard(
   assertNoError(error);
 }
 
+export type UserCounts = {
+  inDeck: number;
+  readLater: number;
+  archived: number;
+  unsorted: number;
+};
+
+/**
+ * Счётчики для бейджей (аналог RPC counts()). Считаем в коде —
+ * функция может отсутствовать/врать на проде.
+ */
+export async function getCountsForUser(userId: string): Promise<UserCounts> {
+  const db = getAdminDb();
+  const now = new Date().toISOString();
+  const [deckRes, laterRes, archivedRes, inFolderRes] = await Promise.all([
+    db
+      .from("cards")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .in("status", ["new", "later"])
+      .or(`defer_until.is.null,defer_until.lte.${now}`),
+    db
+      .from("cards")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("status", "later"),
+    db
+      .from("cards")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("status", "archived"),
+    db.from("card_folders").select("card_id"),
+  ]);
+  const inDeck = deckRes.count ?? 0;
+  const readLater = laterRes.count ?? 0;
+  const archived = archivedRes.count ?? 0;
+  const excluded = new Set((inFolderRes.data ?? []).map((r) => r.card_id));
+
+  const { count: unsortedTotal, error: uErr } = await db
+    .from("cards")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .in("status", ["new", "later"]);
+  const unsorted = Math.max((uErr ? 0 : unsortedTotal ?? 0) - excluded.size, 0);
+
+  return { inDeck, readLater, archived, unsorted };
+}
+
+/**
+ * Нормализация URL для дедупликации: lowercase host, убираем www.,
+ * сбрасываем UTM-параметры и фрагмент, убираем завершающий слеш.
+ */
+export function normalizeUrl(raw: string): string {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return raw.trim();
+  }
+  const host = url.hostname.toLowerCase().replace(/^www\./, "");
+  url.hostname = host;
+  url.hash = "";
+  const clean = new URL(url.toString());
+  for (const k of [...clean.searchParams.keys()]) {
+    if (/^(utm_|fbclid|gclid|igshid|igsh|ref|ref_|source)/i.test(k)) {
+      clean.searchParams.delete(k);
+    }
+  }
+  let out = clean.toString();
+  if (new URL(out).pathname === "/") {
+    out = new URL(out).origin + "/" + (new URL(out).search ?? "");
+  }
+  return out;
+}
+
+export async function deleteCard(userId: string, cardId: string): Promise<void> {
+  const db = getAdminDb();
+  const { data: card, error: scopeErr } = await db
+    .from("cards")
+    .select("id")
+    .eq("id", cardId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (scopeErr) throw scopeErr;
+  if (!card) return;
+
+  await Promise.all([
+    db.from("attachments").delete().eq("card_id", cardId),
+    db.from("card_links").delete().eq("card_id", cardId),
+    db.from("card_folders").delete().eq("card_id", cardId),
+    db.from("card_tags").delete().eq("card_id", cardId),
+    db.from("swipe_actions").delete().eq("card_id", cardId),
+  ]);
+  await db.from("cards").delete().eq("id", cardId).eq("user_id", userId);
+}
+
 export async function deleteArchivedForUser(userId: string): Promise<number> {
   const { data, error } = await getAdminDb()
     .from("cards")

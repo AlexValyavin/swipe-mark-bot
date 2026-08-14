@@ -21,6 +21,7 @@ import { getOpenTarget } from "@/lib/openTarget";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 import { Library } from "@/components/Library";
 import { AiSettings } from "@/components/AiSettings";
+import { AddModal, AddButton } from "@/components/AddModal";
 
 type Tab = "inbox" | "archive" | "library" | "settings";
 
@@ -68,7 +69,20 @@ export default function Home() {
   const [tab, setTab] = useState<Tab>("inbox");
   const [archiveTtlHours, setArchiveTtlHours] = useState<number | null>(null);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const [librarySignal, setLibrarySignal] = useState(0);
+  const [counts, setCounts] = useState<{
+    inDeck: number;
+    readLater: number;
+    archived: number;
+    unsorted: number;
+  } | null>(null);
+  const [folderDeck, setFolderDeck] = useState<{
+    folderId: string;
+    folderName: string;
+  } | null>(null);
+  const [folderDeckCards, setFolderDeckCards] = useState<Bookmark[]>([]);
+  const [folderDeckLoading, setFolderDeckLoading] = useState(false);
   const [hintDismissed, setHintDismissed] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
     return localStorage.getItem("swipe-hint-seen") === "1";
@@ -89,6 +103,17 @@ export default function Home() {
       }
     } catch {
       // настройки не критичны — молча пропускаем
+    }
+  };
+
+  const loadCounts = async () => {
+    try {
+      const res = await fetch("/api/counts");
+      if (!res.ok) return;
+      const data = await res.json();
+      setCounts(data);
+    } catch {
+      // бейджи не критичны
     }
   };
 
@@ -142,6 +167,7 @@ export default function Home() {
   };
 
   const handleSwipe = async (direction: SwipeDirection, bookmark: Bookmark) => {
+    countSwipe();
     setLibrarySignal((s) => s + 1);
     if (direction === "left") {
       telegram?.haptic.impact("medium");
@@ -163,6 +189,30 @@ export default function Home() {
       }
       if (!res) loadBookmarks();
     }
+  };
+
+  const openFolderDeck = async (folderId: string, folderName: string) => {
+    setFolderDeck({ folderId, folderName });
+    setFolderDeckCards([]);
+    setFolderDeckLoading(true);
+    setTab("inbox");
+    try {
+      const res = await fetch(`/api/deck?folderId=${encodeURIComponent(folderId)}`);
+      const data = await res.json();
+      if (!data.error) {
+        setFolderDeckCards(data.bookmarks || []);
+      }
+    } catch {
+      // молча — пустая колода
+    } finally {
+      setFolderDeckLoading(false);
+    }
+  };
+
+  const closeFolderDeck = () => {
+    setFolderDeck(null);
+    setFolderDeckCards([]);
+    refresh();
   };
 
   const returnToDeck = (bookmark: Bookmark) => {
@@ -216,8 +266,19 @@ export default function Home() {
     localStorage.setItem("swipe-hint-seen", "1");
   };
 
+  const countSwipe = () => {
+    try {
+      const n = Number(localStorage.getItem("swipe-count") || 0) + 1;
+      localStorage.setItem("swipe-count", String(n));
+      if (n >= 10) dismissHint();
+    } catch {
+      // localStorage может быть недоступен — игнорируем
+    }
+  };
+
   const refresh = () => {
     setLoading(true);
+    loadCounts();
     loadBookmarks()
       .catch((e) => setError(e instanceof Error ? e.message : "Ошибка загрузки"))
       .finally(() => setLoading(false));
@@ -242,7 +303,7 @@ export default function Home() {
         if (!authRes.ok) {
           throw new Error("Авторизация не прошла");
         }
-        await Promise.all([loadSettings(), loadBookmarks()]);
+        await Promise.all([loadSettings(), loadBookmarks(), loadCounts()]);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Ошибка загрузки");
       } finally {
@@ -311,7 +372,8 @@ export default function Home() {
     );
   }
 
-  const showHint = tab === "inbox" && deck.length > 0 && !hintDismissed;
+  const showHint =
+    tab === "inbox" && !folderDeck && deck.length > 0 && !hintDismissed;
   const groups = groupByDay(archived);
 
   return (
@@ -323,14 +385,22 @@ export default function Home() {
             ⚡
           </div>
         </div>
-        <button
-          onClick={refresh}
-          aria-label="Обновить"
-          title="Обновить"
-          className="flex size-9 items-center justify-center rounded-full bg-surface text-muted transition-colors hover:text-text active:scale-90"
-        >
-          <RefreshCw className="size-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          <AddButton
+            onOpen={() => {
+              telegram?.haptic.selection();
+              setAddOpen(true);
+            }}
+          />
+          <button
+            onClick={refresh}
+            aria-label="Обновить"
+            title="Обновить"
+            className="flex size-9 items-center justify-center rounded-full bg-surface text-muted transition-colors hover:text-text active:scale-90"
+          >
+            <RefreshCw className="size-4" />
+          </button>
+        </div>
       </header>
 
       {/* Content */}
@@ -345,6 +415,23 @@ export default function Home() {
               transition={{ duration: 0.18 }}
               className="flex min-h-0 flex-1 flex-col"
             >
+              {folderDeck && (
+                <div className="flex flex-col px-5 pb-1">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={closeFolderDeck}
+                      aria-label="Закрыть"
+                      className="flex size-8 items-center justify-center rounded-full bg-surface text-muted active:scale-90"
+                    >
+                      <X className="size-4" />
+                    </button>
+                    <span className="text-sm font-medium text-text">
+                      Папка: {folderDeck.folderName} · {folderDeckCards.length}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {showHint && (
                 <motion.div
                   initial={{ opacity: 0, y: -8 }}
@@ -365,7 +452,29 @@ export default function Home() {
                 </motion.div>
               )}
 
-              {deck.length > 0 ? (
+              {folderDeck ? (
+                folderDeckLoading ? (
+                  <div className="flex flex-1 items-center justify-center">
+                    <div className="size-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                  </div>
+                ) : folderDeckCards.length > 0 ? (
+                  <div className="flex min-h-0 flex-1 items-center justify-center px-4 pb-2">
+                    <SwipeDeck
+                      bookmarks={folderDeckCards}
+                      onSwipe={(dir, bm) => {
+                        void handleSwipe(dir, bm);
+                        setFolderDeckCards((prev) => prev.filter((b) => b.id !== bm.id));
+                      }}
+                      onOpen={openBookmark}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+                    <div className="text-5xl">📂</div>
+                    <p className="text-sm text-muted">В папке пока нет карточек</p>
+                  </div>
+                )
+              ) : deck.length > 0 ? (
                 <div className="flex flex-1 min-h-0 items-center justify-center px-4 pb-2">
                   <SwipeDeck bookmarks={deck} onSwipe={handleSwipe} onOpen={openBookmark} />
                 </div>
@@ -552,6 +661,7 @@ export default function Home() {
               onPostpone={postponeFromArchive}
               onReturnToDeck={returnToDeck}
               refreshSignal={librarySignal}
+              onOpenFolderDeck={openFolderDeck}
             />
           ) : tab === "settings" ? (
             <motion.div
@@ -581,9 +691,9 @@ export default function Home() {
         >
           <div className="relative">
             <Inbox className="size-6" />
-            {deck.length > 0 && (
+            {(folderDeck ? folderDeckCards.length > 0 : (counts?.inDeck ?? deck.length) > 0) && (
               <span className="absolute -right-3 -top-1.5 flex min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-accent-text">
-                {deck.length}
+                {folderDeck ? folderDeckCards.length : counts?.inDeck ?? deck.length}
               </span>
             )}
           </div>
@@ -600,6 +710,11 @@ export default function Home() {
         >
           <div className="relative">
             <LibraryBig className="size-6" />
+            {(counts?.unsorted ?? 0) > 0 && (
+              <span className="absolute -right-3 -top-1.5 flex min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-accent-text">
+                {counts?.unsorted ?? 0}
+              </span>
+            )}
           </div>
           <span className="text-[10px] font-medium">Библиотека</span>
         </button>
@@ -637,6 +752,18 @@ export default function Home() {
           <span className="text-[10px] font-medium">Настройки</span>
         </button>
       </nav>
+
+      {/* Add modal */}
+      <AnimatePresence>
+        {addOpen && (
+          <AddModal
+            onClose={() => setAddOpen(false)}
+            onSaved={() => {
+              refresh();
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Clear archive confirm modal */}
       <AnimatePresence>

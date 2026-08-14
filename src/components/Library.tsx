@@ -18,6 +18,11 @@ import {
   Check,
   Sparkles,
   Inbox,
+  CheckCheck,
+  ListChecks,
+  Bot,
+  Archive,
+  ArrowUp,
 } from "lucide-react";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 import { useTelegram } from "@/components/TelegramProvider";
@@ -37,11 +42,18 @@ type Props = {
   onPostpone: (bookmark: Bookmark) => void;
   onReturnToDeck: (bookmark: Bookmark) => void;
   refreshSignal: number;
+  onOpenFolderDeck?: (folderId: string, folderName: string) => void;
 };
 
 const EMOJI_PRESETS = ["📁", "💼", "🛒", "🏠", "❤️", "🎬", "📚", "🎮", "✈️", "🍔", "💡", "🧠", "💰", "🎵", "🏋️", "📝", "🧰", "🎓", "👨‍👩‍👧", "🌸"];
 
-export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: Props) {
+export function Library({
+  onOpen,
+  onPostpone,
+  onReturnToDeck,
+  refreshSignal,
+  onOpenFolderDeck,
+}: Props) {
   const telegram = useTelegram();
   const [tab, setTab] = useState<LibraryTab>("deck");
   const [folderId, setFolderId] = useState<string | null>(null);
@@ -61,6 +73,13 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
   const [pickerOpen, setPickerOpen] = useState(false);
   const [tagMenuCard, setTagMenuCard] = useState<Bookmark | null>(null);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
+
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [massMenu, setMassMenu] = useState<"none" | "folder" | "tag">("none");
+  const [massBusy, setMassBusy] = useState(false);
+  const [massTagInput, setMassTagInput] = useState("");
+  const [longPressTimer, setLongPressTimer] = useState<number | null>(null);
 
   const loadTags = async () => {
     try {
@@ -241,6 +260,96 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
     await load();
   };
 
+  const startLongPress = (id: string) => {
+    const t = window.setTimeout(() => {
+      telegram?.haptic.impact("medium");
+      setSelectMode(true);
+      setSelectedIds(new Set([id]));
+    }, 350);
+    setLongPressTimer(t);
+  };
+
+  const cancelLongPress = () => {
+    if (longPressTimer) {
+      window.clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const exitSelect = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+    setMassMenu("none");
+  };
+
+  const runBulk = async (action: string, payload?: Record<string, unknown>) => {
+    if (selectedIds.size === 0) return;
+    setMassBusy(true);
+    try {
+      const res = await fetch("/api/cards/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cardIds: [...selectedIds], action, payload }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        telegram?.haptic.notification("error");
+        return;
+      }
+      telegram?.haptic.notification("success");
+      if (data.failed > 0) {
+        telegram?.haptic.notification("error");
+      }
+      exitSelect();
+      await load();
+    } catch {
+      telegram?.haptic.notification("error");
+    } finally {
+      setMassBusy(false);
+    }
+  };
+
+  const runBulkAi = async () => {
+    if (selectedIds.size === 0) return;
+    setMassBusy(true);
+    try {
+      const res = await fetch("/api/cards/bulk-ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cardIds: [...selectedIds] }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        telegram?.haptic.notification("error");
+        return;
+      }
+      telegram?.haptic.notification("success");
+      exitSelect();
+      await load();
+    } catch {
+      telegram?.haptic.notification("error");
+    } finally {
+      setMassBusy(false);
+    }
+  };
+
+  const massToFolder = async (folderId: string) => {
+    await runBulk("toFolder", { folderId });
+  };
+
+  const massAddTag = async (name: string) => {
+    await runBulk("addTag", { names: [name] });
+  };
+
   const tabs: { key: LibraryTab; label: string }[] = [
     { key: "deck", label: "В колоде" },
     { key: "later", label: "Открыть позже" },
@@ -354,6 +463,16 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
         >
           <Plus className="size-4" />
         </button>
+        {selectMode && (
+          <button
+            onClick={exitSelect}
+            aria-label="Выйти из выбора"
+            className="flex shrink-0 items-center gap-1 rounded-full bg-accent px-3 py-1.5 text-xs font-semibold text-accent-text"
+          >
+            <CheckCheck className="size-3.5" />
+            Готово · {selectedIds.size}
+          </button>
+        )}
       </div>
 
       {/* Tag filter */}
@@ -409,6 +528,151 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
         )}
       </div>
 
+      {/* Разобрать папку */}
+      {folderId && folderId !== "unsorted" && (
+        <div className="px-5 py-1.5">
+          <button
+            onClick={() => {
+              const f = folders.find((x) => x.id === folderId);
+              telegram?.haptic.selection();
+              onOpenFolderDeck?.(folderId, f?.name || "Без названия");
+            }}
+            className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-accent/15 px-3 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent/25 active:scale-[0.98]"
+          >
+            <Inbox className="size-3.5" />
+            Разобрать эту папку
+          </button>
+        </div>
+      )}
+
+      {/* Массовая панель */}
+      {selectMode && (
+        <div className="flex items-center gap-1.5 overflow-x-auto px-4 py-2 hide-scrollbar">
+          <button
+            onClick={() => {
+              telegram?.haptic.selection();
+              if (selectedIds.size === bookmarks.length) setSelectedIds(new Set());
+              else setSelectedIds(new Set(bookmarks.map((b) => b.id)));
+            }}
+            className="flex shrink-0 items-center gap-1 rounded-full bg-surface px-3 py-2 text-xs font-medium text-text"
+          >
+            <CheckCheck className="size-3.5" />
+            {selectedIds.size === bookmarks.length ? "Снять все" : "Выбрать все"}
+          </button>
+          <button
+            onClick={() => {
+              telegram?.haptic.selection();
+              setMassMenu(massMenu === "folder" ? "none" : "folder");
+            }}
+            disabled={massBusy}
+            className="flex shrink-0 items-center gap-1 rounded-full bg-surface px-3 py-2 text-xs font-medium text-accent disabled:opacity-50"
+          >
+            <Folder className="size-3.5" />
+            В папку
+          </button>
+          <button
+            onClick={() => {
+              telegram?.haptic.selection();
+              setMassMenu(massMenu === "tag" ? "none" : "tag");
+            }}
+            disabled={massBusy}
+            className="flex shrink-0 items-center gap-1 rounded-full bg-surface px-3 py-2 text-xs font-medium text-accent disabled:opacity-50"
+          >
+            <Tag className="size-3.5" />
+            Тег
+          </button>
+          <button
+            onClick={() => void runBulk("archive")}
+            disabled={massBusy}
+            className="flex shrink-0 items-center gap-1 rounded-full bg-surface px-3 py-2 text-xs font-medium text-muted disabled:opacity-50"
+          >
+            <Archive className="size-3.5" />
+            В архив
+          </button>
+          <button
+            onClick={() => void runBulk("toDeck")}
+            disabled={massBusy}
+            className="flex shrink-0 items-center gap-1 rounded-full bg-surface px-3 py-2 text-xs font-medium text-muted disabled:opacity-50"
+          >
+            <ArrowUp className="size-3.5" />
+            В колоду
+          </button>
+          <button
+            onClick={() => void runBulkAi()}
+            disabled={massBusy}
+            className="flex shrink-0 items-center gap-1 rounded-full bg-surface px-3 py-2 text-xs font-medium text-accent disabled:opacity-50"
+          >
+            <Bot className="size-3.5" />
+            Распределить
+          </button>
+          <button
+            onClick={() => void runBulk("delete")}
+            disabled={massBusy}
+            className="flex shrink-0 items-center gap-1 rounded-full bg-red-600/20 px-3 py-2 text-xs font-medium text-red-400 disabled:opacity-50"
+          >
+            <Trash2 className="size-3.5" />
+            Удалить
+          </button>
+        </div>
+      )}
+
+      {selectMode && massMenu === "folder" && (
+        <div className="flex items-center gap-1.5 overflow-x-auto px-4 py-1 hide-scrollbar">
+          {folders.map((f) => (
+            <button
+              key={f.id}
+              onClick={() => void massToFolder(f.id)}
+              disabled={massBusy}
+              className="flex shrink-0 items-center gap-1 rounded-full bg-accent/15 px-3 py-1.5 text-xs font-medium text-accent disabled:opacity-50"
+            >
+              <span>{f.emoji || "📁"}</span>
+              <span>{f.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {selectMode && massMenu === "tag" && (
+        <div className="flex items-center gap-1.5 overflow-x-auto px-4 py-1 hide-scrollbar">
+          <input
+            value={massTagInput}
+            onChange={(e) => setMassTagInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && massTagInput.trim()) {
+                void massAddTag(massTagInput.trim());
+                setMassTagInput("");
+              }
+            }}
+            placeholder="Название тега…"
+            maxLength={40}
+            className="w-40 shrink-0 rounded-xl bg-bg px-3 py-1.5 text-xs text-text placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-accent"
+          />
+          <button
+            onClick={() => {
+              if (massTagInput.trim()) {
+                void massAddTag(massTagInput.trim());
+                setMassTagInput("");
+              }
+            }}
+            disabled={massBusy || !massTagInput.trim()}
+            className="flex shrink-0 items-center gap-1 rounded-full bg-accent px-3 py-1.5 text-xs font-medium text-accent-text disabled:opacity-50"
+          >
+            <Plus className="size-3.5" />
+            Добавить
+          </button>
+          {availableTags.slice(0, 8).map((t) => (
+            <button
+              key={t.id}
+              onClick={() => void massAddTag(t.name)}
+              disabled={massBusy}
+              className="flex shrink-0 items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-xs font-medium text-accent disabled:opacity-50"
+            >
+              <span>#{t.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Content */}
       <div className="flex min-h-0 flex-1 flex-col">
         {loading ? (
@@ -421,8 +685,33 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
           </div>
         ) : bookmarks.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-            <div className="text-5xl">🗂️</div>
-            <p className="text-sm text-muted">Пока пусто…</p>
+            <div className="text-5xl">
+              {q ? "🔍" : selectedTags.length > 0 ? "🏷️" : folderId ? "📂" : tab === "archive" ? "🗂️" : "🗂️"}
+            </div>
+            <p className="text-sm font-medium text-text">
+              {q
+                ? "Ничего не найдено"
+                : selectedTags.length > 0
+                  ? "Нет карточек с этими тегами"
+                  : folderId === "unsorted"
+                    ? "Несортированных нет"
+                    : folderId
+                      ? "В папке пока пусто"
+                      : tab === "archive"
+                        ? "Архив пуст"
+                        : "Пока пусто…"}
+            </p>
+            <p className="text-xs text-muted">
+              {q
+                ? "Попробуй изменить запрос или сбросить теги"
+                : selectedTags.length > 0
+                  ? "Сбрось теги, чтобы увидеть все карточки"
+                  : folderId === "unsorted"
+                    ? "Все карточки уже разложены по папкам"
+                    : folderId
+                      ? "Добавь карточки в эту папку"
+                      : "Отправь ссылку боту — карточки появятся здесь"}
+            </p>
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto p-4 hide-scrollbar">
@@ -430,8 +719,33 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
               {bookmarks.map((b) => (
                 <div
                   key={b.id}
-                  className="group flex items-center gap-3 rounded-xl bg-surface p-3 transition-colors hover:bg-line"
+                  onPointerDown={() => {
+                    if (!selectMode) startLongPress(b.id);
+                  }}
+                  onPointerUp={cancelLongPress}
+                  onPointerLeave={cancelLongPress}
+                  onClick={() => {
+                    if (selectMode) toggleSelect(b.id);
+                  }}
+                  className={`group flex items-center gap-3 rounded-xl bg-surface p-3 transition-colors hover:bg-line ${
+                    selectMode
+                      ? selectedIds.has(b.id)
+                        ? "ring-2 ring-accent"
+                        : "opacity-70"
+                      : ""
+                  }`}
                 >
+                  {selectMode && (
+                    <div
+                      className={`flex size-5 shrink-0 items-center justify-center rounded-md border ${
+                        selectedIds.has(b.id)
+                          ? "border-accent bg-accent text-accent-text"
+                          : "border-line bg-bg"
+                      }`}
+                    >
+                      {selectedIds.has(b.id) && <Check className="size-3.5" />}
+                    </div>
+                  )}
                   {thumbFor(b) ? (
                     <div className="relative size-12 flex-shrink-0 overflow-hidden rounded-lg bg-bg">
                       <div className="absolute inset-0 flex items-center justify-center text-xl">
@@ -514,7 +828,7 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
                     )}
                   </div>
                   <div className="flex flex-shrink-0 items-center gap-1">
-                    {tab === "archive" && (
+                    {!selectMode && tab === "archive" && (
                       <button
                         onClick={() => {
                           telegram?.haptic.selection();
@@ -527,7 +841,7 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
                         <Clock className="size-4" />
                       </button>
                     )}
-                    {tab === "archive" && (
+                    {!selectMode && tab === "archive" && (
                       <button
                         onClick={() => {
                           telegram?.haptic.selection();
@@ -540,41 +854,47 @@ export function Library({ onOpen, onPostpone, onReturnToDeck, refreshSignal }: P
                         <Undo2 className="size-4" />
                       </button>
                     )}
-                    <button
-                      onClick={() => {
-                        telegram?.haptic.selection();
-                        setFolderMenuCard(b);
-                        setPickerOpen(true);
-                      }}
-                      aria-label="В папку"
-                      title="В папку"
-                      className="flex size-8 items-center justify-center rounded-full bg-surface text-accent hover:bg-line active:scale-90"
-                    >
-                      <Folder className="size-4" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        telegram?.haptic.selection();
-                        setTagMenuCard(b);
-                        setTagPickerOpen(true);
-                      }}
-                      aria-label="Теги"
-                      title="Теги"
-                      className="flex size-8 items-center justify-center rounded-full bg-surface text-accent hover:bg-line active:scale-90"
-                    >
-                      <Tag className="size-4" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        telegram?.haptic.impact("medium");
-                        onOpen(b);
-                      }}
-                      aria-label="Открыть"
-                      title="Открыть"
-                      className="flex size-8 items-center justify-center rounded-full bg-accent/15 text-accent hover:bg-accent/25 active:scale-90"
-                    >
-                      <ExternalLink className="size-4" />
-                    </button>
+                    {!selectMode && (
+                      <button
+                        onClick={() => {
+                          telegram?.haptic.selection();
+                          setFolderMenuCard(b);
+                          setPickerOpen(true);
+                        }}
+                        aria-label="В папку"
+                        title="В папку"
+                        className="flex size-8 items-center justify-center rounded-full bg-surface text-accent hover:bg-line active:scale-90"
+                      >
+                        <Folder className="size-4" />
+                      </button>
+                    )}
+                    {!selectMode && (
+                      <button
+                        onClick={() => {
+                          telegram?.haptic.selection();
+                          setTagMenuCard(b);
+                          setTagPickerOpen(true);
+                        }}
+                        aria-label="Теги"
+                        title="Теги"
+                        className="flex size-8 items-center justify-center rounded-full bg-surface text-accent hover:bg-line active:scale-90"
+                      >
+                        <Tag className="size-4" />
+                      </button>
+                    )}
+                    {!selectMode && (
+                      <button
+                        onClick={() => {
+                          telegram?.haptic.impact("medium");
+                          onOpen(b);
+                        }}
+                        aria-label="Открыть"
+                        title="Открыть"
+                        className="flex size-8 items-center justify-center rounded-full bg-accent/15 text-accent hover:bg-accent/25 active:scale-90"
+                      >
+                        <ExternalLink className="size-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
