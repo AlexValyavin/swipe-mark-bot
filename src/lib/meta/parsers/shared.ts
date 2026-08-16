@@ -63,7 +63,12 @@ function decode(s: string): string {
     .replace(/&#39;/g, "'")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
-    .replace(/&#x27;/g, "'");
+    .replace(/&#x27;/g, "'")
+    // Числовые сущности: &#1089; (десятичные) и &#x416; (шестнадцатеричные)
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, code: string) =>
+      String.fromCodePoint(parseInt(code, 16))
+    );
 }
 
 /** Загрузка HTML с браузерным UA и таймаутом, 1 ретрай. Возвращает HTML даже при 403 (часто есть og-теги). */

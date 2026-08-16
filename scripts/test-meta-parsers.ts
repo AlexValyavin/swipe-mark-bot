@@ -122,6 +122,34 @@ test("instagram: сеть недоступна → фолбэк «Instagram • 
   }
 });
 
+test("instagram: числовые HTML-entities (&#x…;, &#…;) декодируются", async () => {
+  const restore = mockFetch([
+    [
+      "instagram.com/reel/",
+      res('<html><head><meta property="og:title" content="&#x416;&#x438;&#x437;&#x43d;&#x44c; &#x432; &#x434;&#x435;&#x442;&#x430;&#x43b;&#x44f;&#x445;">'
+        + '<meta property="og:image" content="https://scontent.cdninstagram.com/v/x.jpg"></head></html>'),
+    ],
+  ]);
+  try {
+    const meta = await parseInstagram("https://www.instagram.com/reel/abc/");
+    assert.equal(meta?.title, "Жизнь в деталях");
+  } finally {
+    restore();
+  }
+});
+
+test("generic: числовые entities в <title> (pikabu) декодируются", async () => {
+  const restore = mockFetch([
+    ["pikabu.ru", res('<html><head><title>&#1057;&#1077;&#1075;&#1086;&#1076;&#1085;&#1103; &#1085;&#1072; &#1087;&#1080;&#1082;&#1072;&#1073;&#1091; | &#1055;&#1080;&#1082;&#1072;&#1073;&#1091;</title></head></html>')],
+  ]);
+  try {
+    const meta = await parseGeneric("https://pikabu.ru/statistics/stories?component=header");
+    assert.equal(meta?.title, "Сегодня на пикабу | Пикабу");
+  } finally {
+    restore();
+  }
+});
+
 test("tiktok: oEmbed → title, author @username, thumbnail", async () => {
   const restore = mockFetch([
     [
