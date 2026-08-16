@@ -163,3 +163,23 @@ test("tags stay undefined when not passed", () => {
   const b = cardToBookmark(card, [], []);
   assert.equal(b.tags, undefined);
 });
+
+test("metaStatus/metaError propagate to Bookmark", () => {
+  const card = stubCard({ source_type: "link", meta_status: "failed", meta_error: "403" });
+  const b = cardToBookmark(card, [], []);
+  assert.equal(b.metaStatus, "failed");
+  assert.equal(b.metaError, "403");
+});
+
+test("metaStatus done with no error → metaError undefined", () => {
+  const card = stubCard({ source_type: "link", meta_status: "done", meta_error: null });
+  const b = cardToBookmark(card, [], []);
+  assert.equal(b.metaStatus, "done");
+  assert.equal(b.metaError, undefined);
+});
+
+test("metaStatus pending → metaStatus передаётся, но UI скрывает", () => {
+  const card = stubCard({ source_type: "link", meta_status: "pending" });
+  const b = cardToBookmark(card, [], []);
+  assert.equal(b.metaStatus, "pending");
+});
