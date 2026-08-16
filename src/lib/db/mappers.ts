@@ -6,6 +6,7 @@ export interface BookmarkMediaItem {
   imageUrl?: string;
   videoUrl?: string;
   fileName?: string | null;
+  durationSeconds?: number | null;
 }
 
 export interface BookmarkFolderMeta {
@@ -30,6 +31,7 @@ export interface Bookmark {
   sourceType?: string;
   sourceUrl?: string | null;
   mediaGroupId?: string;
+  durationSeconds?: number | null;
   mediaItems?: BookmarkMediaItem[];
   status?: string;
   deferUntil?: string | null;
@@ -69,17 +71,23 @@ export function cardToBookmark(
 ): Bookmark {
   const firstLink = links[0] ?? null;
 
-  const mediaItems: BookmarkMediaItem[] = attachments.map((a) => ({
-    type: a.type,
-    fileId: a.telegram_file_id ?? undefined,
-    imageUrl: fileUrl(a.thumbnail_file_id ?? (a.type === "photo" || a.type === "document" ? a.telegram_file_id : null)),
-    videoUrl: a.type === "video" || a.type === "animation" ? fileUrl(a.telegram_file_id) : undefined,
-    fileName: a.file_name ?? null,
-  }));
+  const mediaItems: BookmarkMediaItem[] = attachments.map((a) => {
+    const isPhoto = a.type === "photo";
+    const imageUrl =
+      a.storage_url ??
+      fileUrl(a.thumbnail_file_id ?? (isPhoto ? a.telegram_file_id : null));
+    return {
+      type: a.type,
+      fileId: a.telegram_file_id ?? undefined,
+      imageUrl,
+      fileName: a.file_name ?? null,
+      durationSeconds: a.duration ?? null,
+    };
+  });
 
   const firstPhoto = mediaItems.find((m) => m.type === "photo" && m.imageUrl);
   const firstThumb = mediaItems.find((m) => m.imageUrl);
-  const firstVideo = mediaItems.find((m) => m.videoUrl);
+  const firstVideo = attachments.find((a) => a.type === "video" || a.type === "animation");
 
   const typeMap: Record<string, string> = {
     link: "link",
@@ -106,7 +114,8 @@ export function cardToBookmark(
     caption: card.media_group_id ? card.text ?? undefined : undefined,
     fileId: attachments[0]?.telegram_file_id ?? undefined,
     fileName: attachments[0]?.file_name ?? null,
-    videoUrl: firstVideo?.videoUrl ?? undefined,
+    videoUrl: firstVideo?.storage_url ?? undefined,
+    durationSeconds: firstVideo?.duration ?? undefined,
     sourceType: card.source_type === "forwarded" ? "forward" : "direct",
     sourceUrl: card.source_url ?? null,
     forwardUrl: card.source_type === "forwarded" ? card.source_url ?? undefined : undefined,

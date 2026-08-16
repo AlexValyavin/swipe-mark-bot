@@ -55,13 +55,17 @@ Mini App where users swipe through saved bookmarks. UI copy is Russian (`<html l
 - UI: бейджи нижнего меню (Входящие = `counts.inDeck`, Библиотека = `counts.unsorted`); кнопка «Добавить» в хедере → `AddModal.tsx` (preview-дедуп: «Найдено ссылок: N», дубли ⚠️, «Сохранить (X новых, Y дублей)»); контекстные empty states (поиск/теги/папка/архив); массовый режим в Library (long-press 350мс → чекбоксы → панель [В папку][Тег][В архив][В колоду][Распределить→bulk-ai][Удалить], «Выбрать все/Готово · N»); кнопка «Разобрать эту папку» (активна при выбранной папке) → `GET /api/deck?folderId=` + шапка «Папка: X · N» в табе Входящие; подсказка жестов скрывается после 10 свайпов (`localStorage "swipe-count"`, не в user_settings — колонки нет).
 - Тесты: `scripts/test-preview.ts` (normalizeUrl: utm/hash/www/trailing-slash/instagram-igsh).
 
-## Фаза R — надёжность (Шаг 0 готов)
+## Фаза R — надёжность (Шаг 1 готов)
 - SQL-миграции: `supabase/migrations/0001_reliability.sql` (применяется вручную в SQL Editor — DDL не проходит через PostgREST). Поля: `cards.meta_status` (`pending|processing|done|failed`, default pending) + `cards.meta_error`; `attachments.storage_url`; таблица `meta_cache` (PK = sha256(canonical_url), jsonb `data`, RLS без политик — только service_role).
 - `src/lib/db/meta.ts` — `setCardMetaStatus` (ошибки нормализуются к `timeout|403|parse|network`), `listFailedCards(20)`.
 - `GET /api/settings/diagnostics` — только владелец (`OWNER_TELEGRAM_ID` env, сравнение по `profiles.telegram_id`), последние 20 failed: `{id, url, error, createdAt}`.
 - `POST /api/cards/[id]/refetch` — Шаг 0: заглушка (сброс на pending); реальный парсинг в Шаге 2.
 - UI: `src/components/DiagnosticsSettings.tsx` в табе «Настройки» (скрыт для не-владельца): «Сбоев нет» / список failed с ошибкой+временем / [Повторить].
-- Человек-шаг: в `OWNER_TELEGRAM_ID` и Vercel вернуть прод-значения `AI_KEY_SECRET` и `BOT_USERNAME`.
+- Шаг 1 (медиа-кэш): `src/lib/db/media.ts` — `ensureMediaBucket()` (идемпотентный public бакет `swipemark-media`), `cacheCardMedia(userId, cardId)` (photo → само фото, video/animation/document → thumbnail; download ≤8МБ/10с из Telegram → upload `u/{userId}/{attachmentId}.jpg` → `attachments.storage_url`; без тела видео). Запускается из webhook через `after()` (`kickMediaCache` рядом с `kickEnrich`). `meta_status=done` при полном кэше, `failed` при полном сбое.
+- `/api/file`: `?storageUrl=` → 302; иначе прокси ТОЛЬКО photo (ext в jpg/jpeg/png/webp/gif/heic, timeout 8с, `Cache-Control: public, max-age=31536000, immutable`); video/document/audio/неизвестный ext → 404 `{reason}`.
+- Маппер (`mappers.ts`): mediaItems.imageUrl приоритетно из `storage_url`, иначе `/api/file?fileId=` (фото — telegram_file_id, видео — thumbnail_file_id); `videoUrl` больше не заполняется для видео (не проксируем), `durationSeconds` из `attachments.duration`. `getOpenTarget` для forward открывает forwardUrl/url, для видео — url/источник.
+- UI (`BookmarkCard`): `isVideo` по типу (не по videoUrl), бейдж длительности `mm:ss`, onError-цепочка `storage_url → /api/file?fileId= → placeholder`.
+- Человек-шаг: в `.env.local` и Vercel вернуть прод-значения `AI_KEY_SECRET`, `BOT_USERNAME` и добавить `TELEGRAM_BOT_TOKEN` (без него media-кэш не качает файлы, а webhook молчит).
 
 ## Env vars (`.env.local`, none committed)
 - `TELEGRAM_BOT_TOKEN` — used by the webhook and auth HMAC

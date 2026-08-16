@@ -69,17 +69,27 @@ test("mapa: photo card → mediaItems, imageUrl из fileId", () => {
   assert.equal(b.status, "new");
 });
 
-test("mapa: video card → videoUrl из telegram_file_id, imageUrl из thumbnail", () => {
+test("mapa: video card → видео не проксируется, imageUrl из thumbnail", () => {
   const card = stubCard({ source_type: "video", primary_type: "video" });
   const att = stubAtt({
     type: "video",
     telegram_file_id: "file_id_video",
     thumbnail_file_id: "file_id_thumb",
+    duration: 754,
   });
   const b = cardToBookmark(card, [att], []);
   assert.equal(b.type, "video");
-  assert.equal(b.videoUrl, "/api/file?fileId=file_id_video");
+  assert.equal(b.videoUrl, undefined);
   assert.equal(b.imageUrl, "/api/file?fileId=file_id_thumb");
+  assert.equal(b.durationSeconds, 754);
+});
+
+test("mapa: photo с storage_url → imageUrl берётся из Storage", () => {
+  const card = stubCard({ source_type: "photo", primary_type: "photo" });
+  const att = stubAtt({ storage_url: "https://smm.supabase.co/storage/v1/object/public/swipemark-media/u/u1/a1.jpg" });
+  const b = cardToBookmark(card, [att], []);
+  assert.equal(b.imageUrl, att.storage_url);
+  assert.equal(b.mediaItems?.[0]?.imageUrl, att.storage_url);
 });
 
 test("mapa: forwarded → type forward, sourceType forward", () => {

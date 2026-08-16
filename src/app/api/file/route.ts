@@ -11,27 +11,24 @@ const EXT_MIME: Record<string, string> = {
   webp: "image/webp",
   gif: "image/gif",
   heic: "image/heic",
-  mp4: "video/mp4",
-  mov: "video/quicktime",
-  webm: "video/webm",
-  mkv: "video/x-matroska",
-  m4v: "video/x-m4v",
-  mp3: "audio/mpeg",
-  ogg: "audio/ogg",
-  m4a: "audio/mp4",
-  wav: "audio/wav",
-  pdf: "application/pdf",
-  txt: "text/plain",
-  csv: "text/csv",
-  json: "application/json",
 };
+
+// Типы, которые НИКОГДА не проксируем: видео/документы/аудио.
+const NON_PROXY_EXT = new Set([
+  "mp4", "mov", "webm", "mkv", "m4v",
+  "mp3", "ogg", "m4a", "wav",
+  "pdf", "txt", "csv", "json",
+]);
+
+function extOf(path: string): string {
+  return path.split(".").pop()?.toLowerCase() || "";
+}
 
 function contentTypeFor(path: string, fallback: string | null): string {
   if (fallback && !/application\/octet-stream/i.test(fallback)) {
     return fallback;
   }
-  const ext = path.split(".").pop()?.toLowerCase() || "";
-  return EXT_MIME[ext] || "application/octet-stream";
+  return EXT_MIME[extOf(path)] || "application/octet-stream";
 }
 
 async function resolvePathFromFileId(fileId: string): Promise<string | null> {
@@ -51,6 +48,15 @@ async function resolvePathFromFileId(fileId: string): Promise<string | null> {
 }
 
 export async function GET(req: NextRequest) {
+  // 1. Кэш в Storage: мгновенный redirect.
+  const storageUrl = req.nextUrl.searchParams.get("storageUrl");
+  if (storageUrl && /^https?:\/\//.test(storageUrl)) {
+    return new Response(null, {
+      status: 302,
+      headers: { Location: storageUrl },
+    });
+  }
+
   const path = req.nextUrl.searchParams.get("path");
   let filePath = path || null;
 
@@ -63,13 +69,27 @@ export async function GET(req: NextRequest) {
 
   const token = process.env.TELEGRAM_BOT_TOKEN;
 
-  if (!filePath || !token || !SAFE_PATH.test(filePath)) {
+  if (!filePath || !SAFE_PATH.test(filePath)) {
+    return new Response("Bad request", { status: 400 });
+  }
+
+  // 2. Проксируем только photo. Всё остальное (видео/аудио/документы) — 404.
+  const ext = extOf(filePath);
+  if (NON_PROXY_EXT.has(ext) || !EXT_MIME[ext]) {
+    return new Response(JSON.stringify({ reason: "media type not proxied" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  if (!token) {
     return new Response("Bad request", { status: 400 });
   }
 
   try {
     const res = await fetch(
-      `https://api.telegram.org/file/bot${token}/${filePath}`
+      `https://api.telegram.org/file/bot${token}/${filePath}`,
+      { signal: AbortSignal.timeout(8_000) }
     );
     if (!res.ok) {
       return new Response("Not found", { status: 404 });
@@ -83,7 +103,7 @@ export async function GET(req: NextRequest) {
         "Content-Type": contentType,
         "Content-Disposition": "inline",
         "X-Content-Type-Options": "nosniff",
-        "Cache-Control": "public, max-age=86400, immutable",
+        "Cache-Control": "public, max-age=31536000, immutable",
       },
     });
   } catch (e) {

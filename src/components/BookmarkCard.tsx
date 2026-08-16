@@ -54,7 +54,16 @@ export function BookmarkCard({
     : null;
   const currentItem = items?.[mediaIndex];
   const imageSrc = currentItem?.imageUrl || (mediaIndex === 0 ? bookmark.imageUrl : undefined);
-  const isVideo = Boolean(currentItem?.videoUrl || bookmark.videoUrl);
+  const isVideo = currentItem?.type === "video" || currentItem?.type === "animation" || bookmark.type === "video";
+  const durationSeconds =
+    currentItem?.durationSeconds ?? bookmark.durationSeconds ?? null;
+
+  // Цепочка: storage_url → /api/file?fileId= → placeholder.
+  const fallbackSrc =
+    currentItem?.fileId && imageSrc?.startsWith("http")
+      ? `/api/file?fileId=${encodeURIComponent(currentItem.fileId)}`
+      : null;
+  const shownSrc = fallbackSrc && imgError ? fallbackSrc : imageSrc;
 
   const favicon = faviconUrl(bookmark.domain);
 
@@ -100,9 +109,9 @@ export function BookmarkCard({
     >
       {/* Media / Content Area */}
       <div className="relative flex-1 w-full bg-bg min-h-[200px]">
-        {imageSrc && !imgError ? (
+        {shownSrc && !(imgError && !fallbackSrc) ? (
           <img
-            src={imageSrc}
+            src={shownSrc}
             alt=""
             onError={() => setImgError(true)}
             className="h-full w-full object-cover"
@@ -119,6 +128,13 @@ export function BookmarkCard({
             <div className="flex size-14 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm">
               <Play className="ml-1 size-6 fill-current" />
             </div>
+          </div>
+        )}
+
+        {isVideo && durationSeconds != null && durationSeconds > 0 && (
+          <div className="absolute bottom-3 right-3 rounded-lg bg-black/70 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-white backdrop-blur-sm">
+            {Math.floor(durationSeconds / 60)}:
+            {String(durationSeconds % 60).padStart(2, "0")}
           </div>
         )}
 

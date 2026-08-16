@@ -163,6 +163,7 @@ export async function POST(req: NextRequest) {
       const existingId = await findCardIdByMediaGroup(userId, mediaGroupId);
       if (existingId) {
         await appendAttachment(existingId, attachment);
+        kickMediaCache(userId, existingId);
         if (caption) {
           const existing = await getCardForUpdate(existingId);
           if (existing && !existing.title) {
@@ -194,6 +195,7 @@ export async function POST(req: NextRequest) {
         [attachment]
       );
       kickEnrich(userId, albumCardId);
+      kickMediaCache(userId, albumCardId);
       await reply(`Сохранено ✅ (#${albumCardId})`);
       return NextResponse.json({ ok: true });
     }
@@ -220,6 +222,7 @@ export async function POST(req: NextRequest) {
     );
     if (cardId) {
       kickEnrich(userId, cardId);
+      kickMediaCache(userId, cardId);
       await reply(`Сохранено ✅ (#${cardId})`);
     }
   } catch (e) {
@@ -344,6 +347,21 @@ function kickEnrich(userId: string, cardId: string): void {
       }
     } catch (e) {
       console.error(`AI enrich error for card ${cardId}:`, e);
+    }
+  });
+}
+
+/**
+ * Фоновый кэш медиа (фото/превью) в Supabase Storage.
+ * Никогда не роняет карточку.
+ */
+function kickMediaCache(userId: string, cardId: string): void {
+  after(async () => {
+    try {
+      const { cacheCardMedia } = await import("@/lib/db/media");
+      await cacheCardMedia(userId, cardId);
+    } catch (e) {
+      console.error(`Media cache error for card ${cardId}:`, e);
     }
   });
 }
