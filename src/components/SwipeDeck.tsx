@@ -11,10 +11,12 @@ export function SwipeDeck({
   bookmarks,
   onSwipe,
   onOpen,
+  onRetry,
 }: {
   bookmarks: Bookmark[];
   onSwipe: (direction: SwipeDirection, bookmark: Bookmark) => void;
   onOpen: (bookmark: Bookmark) => void;
+  onRetry?: (bookmark: Bookmark) => void;
 }) {
   const [exitX, setExitX] = useState(500);
   const [exitY, setExitY] = useState(0);
@@ -61,6 +63,7 @@ export function SwipeDeck({
               interactive={true}
               onSwipe={handleSwipe}
               onOpen={() => onOpen(current)}
+              onRetry={onRetry ? () => onRetry(current) : undefined}
             />
           </motion.div>
         </AnimatePresence>

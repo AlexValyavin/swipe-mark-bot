@@ -192,6 +192,21 @@ export default function Home() {
     }
   };
 
+  const retryBookmark = async (bookmark: Bookmark) => {
+    try {
+      const res = await fetch(`/api/cards/${bookmark.id}/refetch`, { method: "POST" });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.metaStatus === "failed") {
+        // оставляем карточку, обновим только статус
+      }
+    } catch {
+      // молча
+    } finally {
+      refresh();
+    }
+  };
+
   const openFolderDeck = async (folderId: string, folderName: string) => {
     setFolderDeck({ folderId, folderName });
     setFolderDeckCards([]);
@@ -467,6 +482,7 @@ export default function Home() {
                         setFolderDeckCards((prev) => prev.filter((b) => b.id !== bm.id));
                       }}
                       onOpen={openBookmark}
+                      onRetry={retryBookmark}
                     />
                   </div>
                 ) : (
@@ -477,7 +493,7 @@ export default function Home() {
                 )
               ) : deck.length > 0 ? (
                 <div className="flex flex-1 min-h-0 items-center justify-center px-4 pb-2">
-                  <SwipeDeck bookmarks={deck} onSwipe={handleSwipe} onOpen={openBookmark} />
+                  <SwipeDeck bookmarks={deck} onSwipe={handleSwipe} onOpen={openBookmark} onRetry={retryBookmark} />
                 </div>
               ) : bookmarks.length > 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">

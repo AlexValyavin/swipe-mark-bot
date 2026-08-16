@@ -759,6 +759,9 @@ export function Library({
                           e.currentTarget.style.display = "none";
                         }}
                       />
+                      {b.metaStatus === "failed" && (
+                        <span className="absolute right-0.5 bottom-0.5 size-2 rounded-full bg-rose-500" title="Не удалось получить метаданные" />
+                      )}
                     </div>
                   ) : (
                     <div className="flex size-12 flex-shrink-0 items-center justify-center rounded-lg bg-bg text-xl">
@@ -767,6 +770,11 @@ export function Library({
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-text">{b.title}</p>
+                    {b.metaStatus === "failed" && (
+                      <span className="mt-0.5 inline-flex items-center gap-1 rounded bg-danger/10 px-1.5 py-0.5 text-[10px] font-medium text-danger">
+                        ⚠️ Не удалось загрузить
+                      </span>
+                    )}
                     {b.folders && b.folders.length > 0 && (
                       <div className="mt-0.5 flex items-center gap-1 overflow-hidden">
                         {b.folders.slice(0, 2).map((f) => (

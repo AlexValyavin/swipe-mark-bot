@@ -49,6 +49,8 @@ export interface Bookmark {
   aiFolderId?: string | null;
   aiFolderName?: string | null;
   aiConfidence?: number | null;
+  metaStatus?: string | null;
+  metaError?: string | null;
 }
 
 function fileUrl(fileId: string | null | undefined): string | undefined {
@@ -141,6 +143,9 @@ export function cardToBookmark(
               : undefined,
           aiConfidence: card.ai_confidence ?? undefined,
         }
+      : {}),
+    ...(card.meta_status
+      ? { metaStatus: card.meta_status, metaError: card.meta_error ?? undefined }
       : {}),
   };
 }

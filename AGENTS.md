@@ -55,7 +55,7 @@ Mini App where users swipe through saved bookmarks. UI copy is Russian (`<html l
 - UI: бейджи нижнего меню (Входящие = `counts.inDeck`, Библиотека = `counts.unsorted`); кнопка «Добавить» в хедере → `AddModal.tsx` (preview-дедуп: «Найдено ссылок: N», дубли ⚠️, «Сохранить (X новых, Y дублей)»); контекстные empty states (поиск/теги/папка/архив); массовый режим в Library (long-press 350мс → чекбоксы → панель [В папку][Тег][В архив][В колоду][Распределить→bulk-ai][Удалить], «Выбрать все/Готово · N»); кнопка «Разобрать эту папку» (активна при выбранной папке) → `GET /api/deck?folderId=` + шапка «Папка: X · N» в табе Входящие; подсказка жестов скрывается после 10 свайпов (`localStorage "swipe-count"`, не в user_settings — колонки нет).
 - Тесты: `scripts/test-preview.ts` (normalizeUrl: utm/hash/www/trailing-slash/instagram-igsh).
 
-## Фаза R — надёжность (Шаги 0–2 готов)
+## Фаза R — надёжность (Шаги 0–3 готов)
 - SQL-миграции: `supabase/migrations/0001_reliability.sql` (применяется вручную в SQL Editor — DDL не проходит через PostgREST). Поля: `cards.meta_status` (`pending|processing|done|failed`, default pending) + `cards.meta_error`; `attachments.storage_url`; таблица `meta_cache` (PK = sha256(canonical_url), jsonb `data`, RLS без политик — только service_role).
 - `src/lib/db/meta.ts` — `setCardMetaStatus` (ошибки нормализуются к `timeout|403|parse|network`), `listFailedCards(20)`.
 - `GET /api/settings/diagnostics` — только владелец (`OWNER_TELEGRAM_ID` env, сравнение по `profiles.telegram_id`), последние 20 failed: `{id, url, error, createdAt}`.
@@ -68,6 +68,7 @@ Mini App where users swipe through saved bookmarks. UI copy is Russian (`<html l
 - Маппер (`mappers.ts`): mediaItems.imageUrl приоритетно из `storage_url`, иначе `/api/file?fileId=` (фото — telegram_file_id, видео — thumbnail_file_id); `videoUrl` больше не заполняется для видео (не проксируем), `durationSeconds` из `attachments.duration`. `getOpenTarget` для forward открывает forwardUrl/url, для видео — url/источник.
 - UI (`BookmarkCard`): `isVideo` по типу (не по videoUrl), бейдж длительности `mm:ss`, onError-цепочка `storage_url → /api/file?fileId= → placeholder`.
 - Тесты Шага 2: `scripts/test-parsers.ts` (8) — parseMetaTags по фикстурам (`scripts/fixtures/`), lengthSeconds-regex, provider-роутинг, normalizeUrl-регресс. Человек-шаг: 10–15 реальных «ломавшихся» ссылок (instagram/youtube/tiktok/t.me) для ручной проверки парсеров.
+- Шаг 3 (устойчивый UI): `Bookmark.metaStatus/metaError` (маппер `mappers.ts`, `card_links` не задействован). `src/components/SourceBadge.tsx` — `sourceKind`/`sourceEmoji` (youtube/instagram/tiktok/telegram/link), `SourceBadge` (нижний левый угол карточки), `MetaStatusDot` (amber-пульс для processing, rose для failed), `FailedActions` ([Повторить]→`POST /api/cards/[id]/refetch` + [Открыть]), `CardSkeleton` (processing). BookmarkCard: скелетон при processing, бейдж источника, failed-индикатор «⚠️ Метаданные не загружены» + кнопки. Library: rose-точка на миниатюре + бейдж «⚠️ Не удалось загрузить» при failed. Свайп-deck передаёт `onRetry` из page.tsx (`retryBookmark` → refetch → refresh).
 - Человек-шаг: в `.env.local` и Vercel вернуть прод-значения `AI_KEY_SECRET`, `BOT_USERNAME` и добавить `TELEGRAM_BOT_TOKEN` (без него media-кэш не качает файлы, а webhook молчит).
 
 ## Env vars (`.env.local`, none committed)

@@ -5,6 +5,12 @@ import { useRef, useState } from "react";
 import { Play, Sparkles } from "lucide-react";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 import { useTelegram } from "@/components/TelegramProvider";
+import {
+  SourceBadge,
+  MetaStatusDot,
+  FailedActions,
+  CardSkeleton,
+} from "@/components/SourceBadge";
 
 export type SwipeDirection = "left" | "right" | "up";
 
@@ -29,11 +35,13 @@ export function BookmarkCard({
   interactive,
   onSwipe,
   onOpen,
+  onRetry,
 }: {
   bookmark: Bookmark;
   interactive: boolean;
   onSwipe: (direction: SwipeDirection) => void;
   onOpen: () => void;
+  onRetry?: () => void;
 }) {
   const dragged = useRef(false);
   const [mediaIndex, setMediaIndex] = useState(0);
@@ -66,6 +74,12 @@ export function BookmarkCard({
   const shownSrc = fallbackSrc && imgError ? fallbackSrc : imageSrc;
 
   const favicon = faviconUrl(bookmark.domain);
+
+  if (bookmark.metaStatus === "processing") {
+    return <CardSkeleton />;
+  }
+
+  const metaFailed = bookmark.metaStatus === "failed";
 
   return (
     <motion.div
@@ -138,6 +152,11 @@ export function BookmarkCard({
           </div>
         )}
 
+        <div className="absolute bottom-3 left-3">
+          <SourceBadge bookmark={bookmark} />
+        </div>
+        <MetaStatusDot bookmark={bookmark} />
+
         {items && items.length > 1 && (
           <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-2 pointer-events-none">
             {items.map((_, i) => (
@@ -199,6 +218,11 @@ export function BookmarkCard({
             AI: {bookmark.aiFolderName}
           </div>
         )}
+        {metaFailed && (
+          <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-danger/10 px-2 py-1 text-xs font-medium text-danger">
+            ⚠️ Метаданные не загружены
+          </div>
+        )}
         <div className="mt-auto flex items-center gap-1.5 pt-4">
           {favicon ? (
             <img
@@ -212,6 +236,9 @@ export function BookmarkCard({
             {bookmark.domain || "ссылка"}
           </span>
         </div>
+        {metaFailed && (
+          <FailedActions bookmark={bookmark} onRetry={onRetry} />
+        )}
       </div>
 
       {interactive && (
