@@ -82,6 +82,27 @@ test("youtube: lengthSeconds со страницы watch → duration_seconds", 
   }
 });
 
+test("youtube: oEmbed 404 и страница без og → title+duration из ytInitialPlayerResponse JSON", async () => {
+  const restore = mockFetch([
+    ["youtube.com/oembed", res("Not Found", 404)],
+    [
+      "youtube.com/watch",
+      res('<html><head><script>var ytInitialPlayerResponse = {"videoDetails":{"videoId":"abc123","title":"Как устроен TCP","lengthSeconds":"754","shortDescription":"Разбор TCP за 12 минут.","author":"Рик"}};</script></head></html>'),
+    ],
+  ]);
+  try {
+    const meta = await parseYoutube("https://www.youtube.com/watch?v=abc123");
+    assert.equal(meta?.provider, "youtube");
+    assert.equal(meta?.title, "Как устроен TCP");
+    assert.equal(meta?.duration_seconds, 754);
+    assert.equal(meta?.description, "Разбор TCP за 12 минут.");
+    assert.equal(meta?.author, "Рик");
+    assert.equal(meta?.image_url, "https://i.ytimg.com/vi/abc123/hqdefault.jpg");
+  } finally {
+    restore();
+  }
+});
+
 test("youtube: невалидный URL без videoId → null", async () => {
   const restore = mockFetch([]);
   try {

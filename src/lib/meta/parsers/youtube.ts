@@ -22,6 +22,52 @@ function videoIdFromUrl(url: string): string | null {
 }
 
 /**
+ * Извлекает JSON объекта ytInitialPlayerResponse (может встречаться несколько раз;
+ * берём блок с videoDetails). Баланс скобок — чтобы не обрезать вложенные объекты.
+ */
+function extractPlayerResponse(html: string): string | null {
+  const marker = "ytInitialPlayerResponse";
+  let idx = 0;
+  while ((idx = html.indexOf(marker, idx)) !== -1) {
+    const eq = html.indexOf("=", idx + marker.length);
+    if (eq === -1) break;
+    const brace = html.indexOf("{", eq);
+    if (brace === -1) break;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    let end = -1;
+    for (let i = brace; i < html.length; i++) {
+      const ch = html[i];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (ch === "\\") escaped = true;
+        else if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') {
+        inString = true;
+        continue;
+      }
+      if (ch === "{") depth++;
+      else if (ch === "}") {
+        depth--;
+        if (depth === 0) {
+          end = i;
+          break;
+        }
+      }
+    }
+    if (end !== -1) {
+      const jsonStr = html.slice(brace, end + 1);
+      if (jsonStr.includes("videoDetails")) return jsonStr;
+    }
+    idx = eq + 1;
+  }
+  return null;
+}
+
+/**
  * YouTube: превью гарантировано через i.ytimg.com (videoId из URL);
  * title/author/длительность — oEmbed или парсинг страницы watch.
  */
@@ -68,6 +114,38 @@ export async function parseYoutube(url: string): Promise<ParsedMeta | null> {
     if (!meta.title) {
       const metaTitle = /<meta[^>]+name=["']title["'][^>]*content=["']([^"']+)["'][^>]*>/i.exec(html);
       if (metaTitle?.[1]) meta.title = metaTitle[1].slice(0, 120);
+    }
+
+    // JSON-фолбэк: ytInitialPlayerResponse.videoDetails (title/duration/description)
+    // — доступен даже когда og-теги отсутствуют.
+    if (!meta.title || !meta.duration_seconds || !meta.description) {
+      const jsonStr = extractPlayerResponse(html);
+      if (jsonStr) {
+        try {
+          const data = JSON.parse(jsonStr) as {
+            videoDetails?: {
+              title?: string;
+              lengthSeconds?: string;
+              shortDescription?: string;
+              author?: string;
+            };
+          };
+          const vd = data.videoDetails;
+          if (vd) {
+            if (!meta.title && vd.title) meta.title = vd.title.slice(0, 120);
+            if (!meta.duration_seconds && vd.lengthSeconds) {
+              const d = Number(vd.lengthSeconds);
+              if (Number.isFinite(d) && d > 0) meta.duration_seconds = d;
+            }
+            if (!meta.description && vd.shortDescription) {
+              meta.description = vd.shortDescription.slice(0, 500);
+            }
+            if (!meta.author && vd.author) meta.author = vd.author;
+          }
+        } catch {
+          // невалидный JSON — игнорируем
+        }
+      }
     }
   }
 
