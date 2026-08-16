@@ -72,6 +72,14 @@ Mini App where users swipe through saved bookmarks. UI copy is Russian (`<html l
 - Шаг 3 (устойчивый UI): `Bookmark.metaStatus/metaError` (маппер `mappers.ts`, `card_links` не задействован). `src/components/SourceBadge.tsx` — `sourceKind`/`sourceEmoji` (youtube/instagram/tiktok/telegram/link), `SourceBadge` (нижний левый угол карточки), `MetaStatusDot` (amber-пульс для processing, rose для failed), `FailedActions` ([Повторить]→`POST /api/cards/[id]/refetch` + [Открыть]), `CardSkeleton` (processing). BookmarkCard: скелетон при processing, бейдж источника, failed-индикатор «⚠️ Метаданные не загружены» + кнопки. Library: rose-точка на миниатюре + бейдж «⚠️ Не удалось загрузить» при failed. Свайп-deck передаёт `onRetry` из page.tsx (`retryBookmark` → refetch → refresh).
 - Человек-шаг: в `.env.local` и Vercel вернуть прод-значения `AI_KEY_SECRET`, `BOT_USERNAME` и добавить `TELEGRAM_BOT_TOKEN` (без него media-кэш не качает файлы, а webhook молчит).
 
+## UI-фаза (Шаг 1 готов)
+- SQL-миграция: `supabase/migrations/0002_ui_phase.sql` (применяется вручную) — `user_settings.ui_scale` (`s|m|l`, default `m`) + таблица `bulk_jobs` (для Шага 3, RLS `user_id = auth.uid()`).
+- Дизайн-токены в `globals.css`: `@theme inline` задаёт `--fs-*` (xs 12/sm 13/base 16/title 17/summary 14/lg 18/xl 22) как `calc(Nrem * var(--ui-scale))`; `html[data-ui-scale="s|l"]` → `--ui-scale` 0.92/1.12; `body { font-size: var(--fs-base) }`; адаптив `.app-column` ≥768px → max-width 640px. Tailwind-классы `text-fs-base`, `text-fs-title` и т.п.
+- `ui_scale`: `src/lib/db/settings.ts` — `getUiScale`/`setUiScale` (upsert в user_settings), `isUiScale`. `GET/POST /api/settings` теперь отдают/принимают `uiScale`. UI: `src/components/UiScaleSettings.tsx` (вверху вкладки «Настройки» в page.tsx) — тумблер S/M/L, применяет `data-ui-scale` на `<html>` сразу, пишет в настройки.
+- Библиотека (`Library.tsx`) по ТЗ: шапка «Библиотека» + поиск + ⚙ фильтры (sheet `FiltersSheet` с тегами и бейджем активных); чипы папок «Все N / папки со счётчиками / ✨ Несортированное / +»; баннер «Автосортировать N карточек» (только при unsorted>0) → `AutosortSheet`-заглушка «скоро» (Шаг 3); сегмент-табы со счётчиками (`tabCounts` из counts API); группировка Сегодня/На этой неделе/Раньше (`groupByPeriod`); карточка списка — превью 56px, title 2 строки, meta-строка (SourceBadge + `⏱ mm:ss`/`📖 ~N мин` + дата), теги ≤2, `MetaStatusDot`, кнопки ≥44px; сетка `md:grid-cols-2`. Хелперы `fmtDuration`/`fmtReadMinutes`/`fmtDate`/`groupByPeriod` в `Library.tsx`.
+- Навигация: иконки 26px, текст 12px, min-height 68px.
+- Ошибка: если `ui_scale` колонки нет в БД (миграция не применена), setUiScale кидает (проверка `error`) — GET падает к 'm'. Тесты 68 зелёных.
+
 ## Env vars (`.env.local`, none committed)
 - `TELEGRAM_BOT_TOKEN` — used by the webhook and auth HMAC
 - `BOT_USERNAME` / `NEXT_PUBLIC_BOT_USERNAME` — bot username without @, used for pairing deep links (`https://t.me/<username>?start=<code>`) and QR

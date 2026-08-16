@@ -23,6 +23,7 @@ import { Library } from "@/components/Library";
 import { AiSettings } from "@/components/AiSettings";
 import { DiagnosticsSettings } from "@/components/DiagnosticsSettings";
 import { AddModal, AddButton } from "@/components/AddModal";
+import { UiScaleSettings } from "@/components/UiScaleSettings";
 
 type Tab = "inbox" | "archive" | "library" | "settings";
 
@@ -101,6 +102,9 @@ export default function Home() {
         setArchiveTtlHours(
           typeof data.archiveTtlHours === "number" ? data.archiveTtlHours : null
         );
+      }
+      if (data.uiScale === "s" || data.uiScale === "l") {
+        document.documentElement.setAttribute("data-ui-scale", data.uiScale);
       }
     } catch {
       // настройки не критичны — молча пропускаем
@@ -393,7 +397,7 @@ export default function Home() {
   const groups = groupByDay(archived);
 
   return (
-    <div className="mx-auto flex h-dvh w-full max-w-md flex-col bg-bg">
+    <div className="app-column mx-auto flex h-dvh w-full flex-col bg-bg">
       {/* Header */}
       <header className="flex items-center justify-between px-5 py-3">
         <div className="flex items-center gap-2.5">
@@ -689,85 +693,90 @@ export default function Home() {
               transition={{ duration: 0.18 }}
               className="flex min-h-0 flex-1 flex-col"
             >
-              <AiSettings />
-              <DiagnosticsSettings />
+              <div className="flex min-h-0 flex-1 flex-col">
+                <div className="p-5 pb-0">
+                  <UiScaleSettings />
+                </div>
+                <AiSettings />
+                <DiagnosticsSettings />
+              </div>
             </motion.div>
           ) : null}
         </AnimatePresence>
       </div>
 
       {/* Bottom navigation */}
-      <nav className="flex items-stretch border-t border-line bg-surface/50 px-2 py-2.5">
+      <nav className="flex items-stretch border-t border-line bg-surface/50 px-2 py-1.5" style={{ minHeight: 68 }}>
         <button
           onClick={() => {
             telegram?.haptic.selection();
             setTab("inbox");
           }}
-          className={`relative flex min-w-0 flex-1 flex-col items-center gap-0.5 py-1 transition-colors ${
+          className={`relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-1 transition-colors ${
             tab === "inbox" ? "text-accent" : "text-muted"
           }`}
         >
           <div className="relative">
-            <Inbox className="size-6" />
+            <Inbox className="size-[26px]" />
             {(folderDeck ? folderDeckCards.length > 0 : (counts?.inDeck ?? deck.length) > 0) && (
               <span className="absolute -right-3 -top-1.5 flex min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-accent-text">
                 {folderDeck ? folderDeckCards.length : counts?.inDeck ?? deck.length}
               </span>
             )}
           </div>
-          <span className="text-[10px] font-medium">Входящие</span>
+          <span className="text-xs font-medium">Входящие</span>
         </button>
         <button
           onClick={() => {
             telegram?.haptic.selection();
             setTab("library");
           }}
-          className={`relative flex min-w-0 flex-1 flex-col items-center gap-0.5 py-1 transition-colors ${
+          className={`relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-1 transition-colors ${
             tab === "library" ? "text-accent" : "text-muted"
           }`}
         >
           <div className="relative">
-            <LibraryBig className="size-6" />
+            <LibraryBig className="size-[26px]" />
             {(counts?.unsorted ?? 0) > 0 && (
               <span className="absolute -right-3 -top-1.5 flex min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-accent-text">
                 {counts?.unsorted ?? 0}
               </span>
             )}
           </div>
-          <span className="text-[10px] font-medium">Библиотека</span>
+          <span className="text-xs font-medium">Библиотека</span>
         </button>
         <button
           onClick={() => {
             telegram?.haptic.selection();
             setTab("archive");
           }}
-          className={`relative flex min-w-0 flex-1 flex-col items-center gap-0.5 py-1 transition-colors ${
+          className={`relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-1 transition-colors ${
             tab === "archive" ? "text-accent" : "text-muted"
           }`}
         >
           <div className="relative">
-            <Archive className="size-6" />
+            <Archive className="size-[26px]" />
             {archived.length > 0 && (
               <span className="absolute -right-3 -top-1.5 flex min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-accent-text">
                 {archived.length}
               </span>
             )}
           </div>
-          <span className="text-[10px] font-medium">Архив</span>
+          <span className="text-xs font-medium">Архив</span>
         </button>
         <button
           onClick={() => {
             telegram?.haptic.selection();
             setTab("settings");
           }}
-          className={`relative flex min-w-0 flex-1 flex-col items-center gap-0.5 py-1 transition-colors ${
+          className={`relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-1 transition-colors ${
             tab === "settings" ? "text-accent" : "text-muted"
           }`}
         >
           <div className="relative">
-            <Settings className="size-6" />
+            <Settings className="size-[26px]" />
           </div>
-          <span className="text-[10px] font-medium">Настройки</span>
+          <span className="text-xs font-medium">Настройки</span>
         </button>
       </nav>
 

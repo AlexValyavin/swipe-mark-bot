@@ -18,7 +18,19 @@ export interface UserSettingsRow {
   ai_custom_base_url: string | null;
   ai_mode: string;
   archive_ttl_hours: number | null;
+  ui_scale: string;
   updated_at: string;
+}
+
+export interface BulkJobRow {
+  id: string;
+  user_id: string;
+  kind: string;
+  total: number;
+  done: number;
+  failed: number;
+  status: string;
+  created_at: string;
 }
 
 export interface FolderRow {

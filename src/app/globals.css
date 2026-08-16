@@ -25,6 +25,26 @@
   --color-line: color-mix(in srgb, var(--tg-theme-text-color) 12%, transparent);
   --color-danger: #f43f5e;
   --color-success: #34d399;
+
+  /* Type-scale: S/M/L масштаб через var(--ui-scale) на :root */
+  --fs-xs: calc(0.75rem * var(--ui-scale));        /* 12 */
+  --fs-sm: calc(0.8125rem * var(--ui-scale));      /* 13 — meta */
+  --fs-base: calc(1rem * var(--ui-scale));         /* 16 — база */
+  --fs-title: calc(1.0625rem * var(--ui-scale));   /* 17 — заголовок карточки */
+  --fs-summary: calc(0.875rem * var(--ui-scale));  /* 14 — саммари */
+  --fs-lg: calc(1.125rem * var(--ui-scale));       /* 18 */
+  --fs-xl: calc(1.375rem * var(--ui-scale));       /* 22 */
+}
+
+:root {
+  --ui-scale: 1;
+}
+
+html[data-ui-scale="s"] {
+  --ui-scale: 0.92;
+}
+html[data-ui-scale="l"] {
+  --ui-scale: 1.12;
 }
 
 html,
@@ -37,6 +57,14 @@ body {
   background: var(--tg-theme-bg-color, #000);
   color: var(--tg-theme-text-color, #fff);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: var(--fs-base);
+}
+
+/* Масштабная сетка на десктопе: контент в колонне, библиотека шире */
+@media (min-width: 768px) {
+  .app-column {
+    max-width: 640px;
+  }
 }
 
 /* Ensure full height in Telegram iframe */
@@ -52,4 +80,12 @@ body {
 .hide-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* Touch-цели: минимум 44px для интерактивных элементов */
+button,
+a,
+input,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
 }
