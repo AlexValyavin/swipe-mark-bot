@@ -21,6 +21,7 @@ import { getOpenTarget } from "@/lib/openTarget";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 import { Library } from "@/components/Library";
 import { AiSettings } from "@/components/AiSettings";
+import { DiagnosticsSettings } from "@/components/DiagnosticsSettings";
 import { AddModal, AddButton } from "@/components/AddModal";
 
 type Tab = "inbox" | "archive" | "library" | "settings";
@@ -673,6 +674,7 @@ export default function Home() {
               className="flex min-h-0 flex-1 flex-col"
             >
               <AiSettings />
+              <DiagnosticsSettings />
             </motion.div>
           ) : null}
         </AnimatePresence>

@@ -55,12 +55,21 @@ Mini App where users swipe through saved bookmarks. UI copy is Russian (`<html l
 - UI: бейджи нижнего меню (Входящие = `counts.inDeck`, Библиотека = `counts.unsorted`); кнопка «Добавить» в хедере → `AddModal.tsx` (preview-дедуп: «Найдено ссылок: N», дубли ⚠️, «Сохранить (X новых, Y дублей)»); контекстные empty states (поиск/теги/папка/архив); массовый режим в Library (long-press 350мс → чекбоксы → панель [В папку][Тег][В архив][В колоду][Распределить→bulk-ai][Удалить], «Выбрать все/Готово · N»); кнопка «Разобрать эту папку» (активна при выбранной папке) → `GET /api/deck?folderId=` + шапка «Папка: X · N» в табе Входящие; подсказка жестов скрывается после 10 свайпов (`localStorage "swipe-count"`, не в user_settings — колонки нет).
 - Тесты: `scripts/test-preview.ts` (normalizeUrl: utm/hash/www/trailing-slash/instagram-igsh).
 
+## Фаза R — надёжность (Шаг 0 готов)
+- SQL-миграции: `supabase/migrations/0001_reliability.sql` (применяется вручную в SQL Editor — DDL не проходит через PostgREST). Поля: `cards.meta_status` (`pending|processing|done|failed`, default pending) + `cards.meta_error`; `attachments.storage_url`; таблица `meta_cache` (PK = sha256(canonical_url), jsonb `data`, RLS без политик — только service_role).
+- `src/lib/db/meta.ts` — `setCardMetaStatus` (ошибки нормализуются к `timeout|403|parse|network`), `listFailedCards(20)`.
+- `GET /api/settings/diagnostics` — только владелец (`OWNER_TELEGRAM_ID` env, сравнение по `profiles.telegram_id`), последние 20 failed: `{id, url, error, createdAt}`.
+- `POST /api/cards/[id]/refetch` — Шаг 0: заглушка (сброс на pending); реальный парсинг в Шаге 2.
+- UI: `src/components/DiagnosticsSettings.tsx` в табе «Настройки» (скрыт для не-владельца): «Сбоев нет» / список failed с ошибкой+временем / [Повторить].
+- Человек-шаг: в `OWNER_TELEGRAM_ID` и Vercel вернуть прод-значения `AI_KEY_SECRET` и `BOT_USERNAME`.
+
 ## Env vars (`.env.local`, none committed)
 - `TELEGRAM_BOT_TOKEN` — used by the webhook and auth HMAC
 - `BOT_USERNAME` / `NEXT_PUBLIC_BOT_USERNAME` — bot username without @, used for pairing deep links (`https://t.me/<username>?start=<code>`) and QR
 - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — server DB access (service role; never exposed to client)
 - `SUPABASE_ANON_KEY` — used only server-side to verify Bearer auth tokens
 - `FIREBASE_SERVICE_ACCOUNT_KEY` — legacy, only for `scripts/migrate-firestore.ts` (inline JSON string, parsed with `JSON.parse`)
+- `OWNER_TELEGRAM_ID` — Telegram ID владельца; только ему показывается блок «Диагностика» (`/api/settings/diagnostics`)
 - (Legacy client config `NEXT_PUBLIC_FIREBASE_*` no longer used)
 
 ## Gotchas

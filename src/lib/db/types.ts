@@ -64,6 +64,8 @@ export interface CardRow {
   ai_folder_id: string | null;
   ai_confidence: number | null;
   ai_tags: Json | null;
+  meta_status: string;
+  meta_error: string | null;
   embedding: unknown;
   created_at: string;
   updated_at: string;
@@ -87,6 +89,7 @@ export interface AttachmentRow {
   type: string;
   telegram_file_id: string | null;
   thumbnail_file_id: string | null;
+  storage_url: string | null;
   file_name: string | null;
   mime_type: string | null;
   file_size: number | null;
@@ -124,6 +127,14 @@ export interface PairingCodeRow {
   created_at: string;
 }
 
+export interface MetaCacheRow {
+  url_hash: string;
+  url: string;
+  provider: string | null;
+  data: Json;
+  created_at: string;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -138,6 +149,7 @@ export interface Database {
       card_links: { Row: CardLinkRow };
       swipe_actions: { Row: SwipeActionRow };
       pairing_codes: { Row: PairingCodeRow };
+      meta_cache: { Row: MetaCacheRow };
     };
   };
 }
