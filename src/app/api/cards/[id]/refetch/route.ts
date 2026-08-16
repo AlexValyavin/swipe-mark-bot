@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
 import { getForUser } from "@/lib/db/cards";
-import { setCardMetaStatus } from "@/lib/db/meta";
+import { enrichCardMeta } from "@/lib/meta/enrich";
 
 export const runtime = "nodejs";
 
 /**
- * Повторное извлечение метаданных для карточки.
- * Шаг 0: заглушка — сбрасывает статус на pending (реальный парсинг появится в Шаге 2).
+ * Повторное извлечение метаданных для карточки (реальный парсинг).
+ * Запускается вручную из «Диагностики» (владелец) и автоматически для failed.
  */
 export async function POST(
   req: NextRequest,
@@ -25,9 +25,13 @@ export async function POST(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    await setCardMetaStatus(id, "pending", null);
+    const outcome = await enrichCardMeta(userId, id);
 
-    return NextResponse.json({ ok: true, cardId: id, metaStatus: "pending" });
+    return NextResponse.json({
+      ok: true,
+      cardId: id,
+      metaStatus: outcome.status === "done" ? "done" : "failed",
+    });
   } catch (e) {
     console.error("Refetch error:", e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });

@@ -82,13 +82,21 @@ export async function POST(req: NextRequest) {
       }, [], [{ url }]);
       known.add(url);
       created.push(cardId);
-      // AI-обогащение в фоне, как в webhook.
+      // Обогащение в фоне: AI + метаданные.
       after(async () => {
         try {
           const { enrichCard } = await import("@/lib/ai/enrich");
           await enrichCard(userId, cardId);
         } catch (e) {
           console.error(`AI enrich error for card ${cardId}:`, e);
+        }
+      });
+      after(async () => {
+        try {
+          const { enrichCardMeta } = await import("@/lib/meta/enrich");
+          await enrichCardMeta(userId, cardId);
+        } catch (e) {
+          console.error(`Meta enrich error for card ${cardId}:`, e);
         }
       });
     }

@@ -223,6 +223,7 @@ export async function POST(req: NextRequest) {
     if (cardId) {
       kickEnrich(userId, cardId);
       kickMediaCache(userId, cardId);
+      if (links.length > 0) kickMetaEnrich(userId, cardId);
       await reply(`Сохранено ✅ (#${cardId})`);
     }
   } catch (e) {
@@ -311,8 +312,10 @@ function deriveTitle(opts: { caption: string; text: string; type: string }): str
       return "Видео";
     case "document":
       return "Документ";
-    case "link":
-      return "Ссылка";
+    case "link": {
+      const host = domainOf(opts.text);
+      return host ?? "Ссылка";
+    }
     case "forwarded":
       return "Сохранённое сообщение";
     default:
@@ -364,6 +367,26 @@ function kickMediaCache(userId: string, cardId: string): void {
       console.error(`Media cache error for card ${cardId}:`, e);
     }
   });
+}
+
+/**
+ * Фоновое извлечение метаданных по ссылкам карточки (parsers + meta_cache).
+ * Один авто-ретрай failed через ~60 с.
+ */
+function kickMetaEnrich(userId: string, cardId: string): void {
+  const run = async () => {
+    try {
+      const { enrichCardMeta } = await import("@/lib/meta/enrich");
+      const outcome = await enrichCardMeta(userId, cardId);
+      if (outcome.status === "failed") {
+        console.warn(`Meta enrich failed for card ${cardId}: ${outcome.reason}; retry in 60s`);
+        setTimeout(run, 60_000);
+      }
+    } catch (e) {
+      console.error(`Meta enrich error for card ${cardId}:`, e);
+    }
+  };
+  after(run);
 }
 
 /**
