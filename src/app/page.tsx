@@ -24,6 +24,7 @@ import { AiSettings } from "@/components/AiSettings";
 import { DiagnosticsSettings } from "@/components/DiagnosticsSettings";
 import { AddModal, AddButton } from "@/components/AddModal";
 import { UiScaleSettings } from "@/components/UiScaleSettings";
+import { FullscreenSettings } from "@/components/FullscreenSettings";
 
 type Tab = "inbox" | "archive" | "library" | "settings";
 
@@ -515,7 +516,7 @@ export default function Home() {
                     <div className="size-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
                   </div>
                 ) : folderDeckCards.length > 0 ? (
-                  <div className="flex min-h-0 flex-1 items-center justify-center px-4 pb-2">
+                  <div className="flex min-h-0 flex-1 items-center justify-center px-4 pb-2 md:max-h-[min(820px,calc(100dvh-140px))]">
                     <SwipeDeck
                       bookmarks={folderDeckCards}
                       onSwipe={(dir, bm) => {
@@ -533,7 +534,7 @@ export default function Home() {
                   </div>
                 )
               ) : deck.length > 0 ? (
-                <div className="flex flex-1 min-h-0 items-center justify-center px-4 pb-2">
+                <div className="flex flex-1 min-h-0 items-center justify-center px-4 pb-2 md:max-h-[min(820px,calc(100dvh-140px))]">
                   <SwipeDeck bookmarks={deck} onSwipe={handleSwipe} onOpen={openBookmark} onRetry={retryBookmark} />
                 </div>
               ) : bookmarks.length > 0 ? (
@@ -731,8 +732,9 @@ export default function Home() {
               className="flex min-h-0 flex-1 flex-col"
             >
               <div className="flex min-h-0 flex-1 flex-col">
-                <div className="p-5 pb-0">
+                <div className="flex flex-col gap-2 p-5 pb-0">
                   <UiScaleSettings />
+                  <FullscreenSettings />
                 </div>
                 <AiSettings />
                 <DiagnosticsSettings />

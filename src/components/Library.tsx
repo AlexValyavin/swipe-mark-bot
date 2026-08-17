@@ -832,7 +832,7 @@ export function Library({
                 <h3 className="mb-1.5 px-1 text-xs font-semibold uppercase tracking-wider text-muted">
                   {g.label}
                 </h3>
-                <div className="grid grid-cols-1 gap-1 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-1 md:grid-cols-2 xl:grid-cols-3">
                   {g.items.map((b) => (
                     <div
                       key={b.id}

@@ -33,7 +33,7 @@ export function SwipeDeck({
   };
 
   return (
-    <div className="flex h-full w-full max-w-[90vw] mx-auto flex-col">
+    <div className="mx-auto flex h-full w-full max-w-[90vw] flex-col md:max-w-[560px]">
       <div className="relative flex-1 min-h-0">
         {/* Background stack for next cards - render first so they're behind */}
         <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 0 }}>

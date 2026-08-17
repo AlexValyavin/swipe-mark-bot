@@ -63,7 +63,7 @@ body {
 /* Масштабная сетка на десктопе: контент в колонне, библиотека шире */
 @media (min-width: 768px) {
   .app-column {
-    max-width: 640px;
+    max-width: 960px;
   }
 }
 

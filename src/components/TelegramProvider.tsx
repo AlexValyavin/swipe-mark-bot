@@ -34,6 +34,11 @@ type TelegramWebApp = {
   setHeaderColor: (color: string) => void;
   expand: () => void;
   close: () => void;
+  isFullscreen?: boolean;
+  requestFullscreen?: () => Promise<void>;
+  exitFullscreen?: () => Promise<void>;
+  onEvent?: (event: string, callback: (...args: unknown[]) => void) => void;
+  offEvent?: (event: string, callback: (...args: unknown[]) => void) => void;
   HapticFeedback?: {
     impactOccurred: (style: "light" | "medium" | "heavy") => void;
     notificationOccurred: (type: "error" | "success" | "warning") => void;
@@ -57,6 +62,12 @@ type TelegramContextValue = {
   themeParams: ThemeParams | null;
   haptic: Haptic;
   confirm: (message: string) => Promise<boolean>;
+  fullscreen: {
+    supported: boolean;
+    isFullscreen: boolean;
+    request: () => void;
+    exit: () => void;
+  };
 };
 
 const noop = () => {};
@@ -84,6 +95,7 @@ function applyThemeParams(app: TelegramWebApp) {
 
 export function TelegramProvider({ children }: { children: React.ReactNode }) {
   const [twa, setTwa] = useState<TelegramWebApp | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -94,7 +106,10 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
       existing.ready();
       existing.expand();
       applyThemeParams(existing);
-      setTimeout(() => setTwa(existing), 0);
+      setTimeout(() => {
+        setTwa(existing);
+        setIsFullscreen(!!existing.isFullscreen);
+      }, 0);
       return;
     }
 
@@ -107,11 +122,24 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
       if (app?.initDataUnsafe?.user) {
         app.ready();
         applyThemeParams(app);
-        setTimeout(() => setTwa(app), 0);
+        setTimeout(() => {
+          setTwa(app);
+          setIsFullscreen(!!app.isFullscreen);
+        }, 0);
       }
     };
     document.head.appendChild(script);
   }, []);
+
+  // Подписка на изменения полноэкранного режима (Telegram WebApp).
+  useEffect(() => {
+    if (!twa || typeof twa.onEvent !== "function") return;
+    const handler = () => setIsFullscreen(!!twa.isFullscreen);
+    twa.onEvent("isFullscreenChanged", handler);
+    return () => {
+      if (typeof twa.offEvent === "function") twa.offEvent("isFullscreenChanged", handler);
+    };
+  }, [twa]);
 
   const haptic: Haptic = twa?.HapticFeedback
     ? {
@@ -131,6 +159,18 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
     return Promise.resolve(typeof window !== "undefined" && window.confirm(message));
   };
 
+  const fsSupported = !!twa && typeof twa.requestFullscreen === "function";
+  const fullscreen = {
+    supported: fsSupported,
+    isFullscreen,
+    request: () => {
+      if (fsSupported) twa!.requestFullscreen!().catch(() => {});
+    },
+    exit: () => {
+      if (fsSupported) twa!.exitFullscreen!().catch(() => {});
+    },
+  };
+
   return (
     <TelegramContext.Provider
       value={{
@@ -139,6 +179,7 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
         themeParams: twa?.themeParams ?? null,
         haptic,
         confirm,
+        fullscreen,
       }}
     >
       {children}
