@@ -304,3 +304,83 @@ export async function dismissSuggestion(userId: string, cardId: string): Promise
     .eq("id", cardId)
     .eq("user_id", userId);
 }
+
+export type SummaryOutcome =
+  | { status: "ok"; summary: string }
+  | { status: "no_ai" }
+  | { status: "no_content" }
+  | { status: "failed"; reason: string };
+
+/**
+ * Генерирует краткое саммари карточки (до ~90 слов) через BYOK-адаптер.
+ * Пишет ai_summary в cards. Не требует ai_mode — работает при любом подключённом ключе.
+ * Ошибки перехватываются: карточка не роняется.
+ */
+export async function generateCardSummary(
+  userId: string,
+  cardId: string
+): Promise<SummaryOutcome> {
+  const db = getAdminDb();
+
+  const { data: card } = await db
+    .from("cards")
+    .select("id, source_type, title, text, source_url")
+    .eq("id", cardId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!card) return { status: "no_content" };
+
+  const { data: links } = await db
+    .from("card_links")
+    .select("og_description")
+    .eq("card_id", cardId)
+    .limit(1);
+  const description = (links?.[0] as { og_description?: string | null } | undefined)
+    ?.og_description;
+
+  const content = [
+    card.title,
+    card.text,
+    description,
+    card.source_url ? `ссылка: ${card.source_url}` : null,
+  ]
+    .filter((x): x is string => Boolean(x && x.trim()))
+    .join("\n")
+    .slice(0, PROMPT_MAX_CHARS);
+  if (!content.trim()) return { status: "no_content" };
+
+  const ctx = await resolveAiContext(userId);
+  if (!ctx) return { status: "no_ai" };
+
+  try {
+    const result = await chatCompletion({
+      provider: ctx.provider,
+      apiKey: ctx.apiKey,
+      model: ctx.model,
+      baseUrl: ctx.baseUrl,
+      messages: [
+        {
+          role: "system",
+          content:
+            "Ты кратко пересказываешь сохранённые ссылки. Верни только саммари без вступлений, 2–3 предложения, до 90 слов.",
+        },
+        { role: "user", content: `Кратко о чём это:\n${content}` },
+      ],
+      maxTokens: 200,
+      timeoutMs: 15000,
+    });
+
+    const summary = result.content.trim().replace(/\s+/g, " ").slice(0, 500);
+    if (!summary) return { status: "failed", reason: "empty response" };
+
+    await db
+      .from("cards")
+      .update({ ai_summary: summary, updated_at: new Date().toISOString() })
+      .eq("id", cardId)
+      .eq("user_id", userId);
+
+    return { status: "ok", summary };
+  } catch (e) {
+    return { status: "failed", reason: e instanceof Error ? e.message : "unknown" };
+  }
+}

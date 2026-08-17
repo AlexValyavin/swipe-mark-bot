@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Inbox,
@@ -89,6 +89,10 @@ export default function Home() {
     if (typeof window === "undefined") return true;
     return localStorage.getItem("swipe-hint-seen") === "1";
   });
+  const [lastSwipe, setLastSwipe] = useState<Bookmark | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [navHidden, setNavHidden] = useState(false);
+  const swipedOnce = useRef(false);
 
   const isMiniApp = !!twa;
   const user = twa?.initDataUnsafe?.user;
@@ -174,10 +178,15 @@ export default function Home() {
   const handleSwipe = async (direction: SwipeDirection, bookmark: Bookmark) => {
     countSwipe();
     setLibrarySignal((s) => s + 1);
+    if (!swipedOnce.current) {
+      swipedOnce.current = true;
+      setNavHidden(true);
+    }
     if (direction === "left") {
       telegram?.haptic.impact("medium");
       setDeck((prev) => prev.filter((b) => b.id !== bookmark.id));
       setArchived((prev) => [...prev, bookmark]);
+      showUndoToast(bookmark);
       const res = await postAction(bookmark.id, "left");
       if (!res) loadBookmarks();
     } else if (direction === "up") {
@@ -189,11 +198,33 @@ export default function Home() {
       const res = await postAction(bookmark.id, "right");
       if (res?.status === "archived") {
         setArchived((prev) => [...prev, bookmark]);
+        showUndoToast(bookmark);
       } else {
         setDeck((prev) => [...prev, bookmark]);
       }
       if (!res) loadBookmarks();
     }
+  };
+
+  const showUndoToast = (bookmark: Bookmark) => {
+    setLastSwipe(bookmark);
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    undoTimer.current = setTimeout(() => setLastSwipe(null), 4000);
+  };
+
+  const undoLastSwipe = () => {
+    telegram?.haptic.selection();
+    if (!lastSwipe) return;
+    const bm = lastSwipe;
+    setLastSwipe(null);
+    if (undoTimer.current) {
+      clearTimeout(undoTimer.current);
+      undoTimer.current = null;
+    }
+    setLibrarySignal((s) => s + 1);
+    setArchived((prev) => prev.filter((x) => x.id !== bm.id));
+    setDeck((prev) => [bm, ...prev.filter((x) => x.id !== bm.id)]);
+    postAction(bm.id, "undo");
   };
 
   const retryBookmark = async (bookmark: Bookmark) => {
@@ -303,6 +334,12 @@ export default function Home() {
       .catch((e) => setError(e instanceof Error ? e.message : "Ошибка загрузки"))
       .finally(() => setLoading(false));
   };
+
+  useEffect(() => {
+    return () => {
+      if (undoTimer.current) clearTimeout(undoTimer.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!initData || !user) {
@@ -706,10 +743,16 @@ export default function Home() {
       </div>
 
       {/* Bottom navigation */}
-      <nav className="flex items-stretch border-t border-line bg-surface/50 px-2 py-1.5" style={{ minHeight: 68 }}>
+      <motion.nav
+        animate={{ y: navHidden && tab === "inbox" ? "100%" : 0 }}
+        transition={{ type: "spring", stiffness: 260, damping: 30 }}
+        className="flex items-stretch border-t border-line bg-surface/50 px-2 py-1.5"
+        style={{ minHeight: 68 }}
+      >
         <button
           onClick={() => {
             telegram?.haptic.selection();
+            setNavHidden(false);
             setTab("inbox");
           }}
           className={`relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-1 transition-colors ${
@@ -767,6 +810,7 @@ export default function Home() {
         <button
           onClick={() => {
             telegram?.haptic.selection();
+            setNavHidden(false);
             setTab("settings");
           }}
           className={`relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-1 transition-colors ${
@@ -778,7 +822,43 @@ export default function Home() {
           </div>
           <span className="text-xs font-medium">Настройки</span>
         </button>
-      </nav>
+      </motion.nav>
+
+      {/* Триггер для возврата навигации в immersive-режиме */}
+      {navHidden && tab === "inbox" && (
+        <button
+          onClick={() => {
+            telegram?.haptic.selection();
+            setNavHidden(false);
+          }}
+          aria-label="Показать меню"
+          className="fixed bottom-1.5 left-1/2 z-30 -translate-x-1/2 rounded-full border border-line bg-surface/80 px-4 py-1 text-muted backdrop-blur-sm transition-colors hover:text-text active:scale-95"
+          style={{ touchAction: "none" }}
+        >
+          ⋯
+        </button>
+      )}
+
+      {/* Undo toast */}
+      <AnimatePresence>
+        {lastSwipe && (
+          <motion.div
+            initial={{ opacity: 0, y: 24, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.96 }}
+            transition={{ type: "spring", stiffness: 320, damping: 26 }}
+            className="fixed bottom-20 left-1/2 z-40 -translate-x-1/2 flex items-center gap-2 rounded-full border border-line bg-surface/95 py-2 pl-4 pr-2 shadow-2xl backdrop-blur-sm"
+          >
+            <span className="text-fs-sm text-text">В архив</span>
+            <button
+              onClick={undoLastSwipe}
+              className="rounded-full bg-accent px-3 py-1 text-fs-sm font-semibold text-accent-text transition-colors active:scale-95"
+            >
+              Отменить
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Add modal */}
       <AnimatePresence>

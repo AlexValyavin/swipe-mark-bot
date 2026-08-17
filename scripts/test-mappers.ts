@@ -183,3 +183,31 @@ test("metaStatus pending → metaStatus передаётся, но UI скрыв
   const b = cardToBookmark(card, [], []);
   assert.equal(b.metaStatus, "pending");
 });
+
+test("readTimeMin: из estimated_minutes когда задан", () => {
+  const card = stubCard({ source_type: "link", estimated_minutes: 8 });
+  const b = cardToBookmark(card, [], []);
+  assert.equal(b.readTimeMin, 8);
+});
+
+test("readTimeMin: из длины описания (long text)", () => {
+  const words = Array.from({ length: 400 }, (_, i) => `word${i}`).join(" ");
+  const card = stubCard({ source_type: "link" });
+  const link: CardLinkRow = {
+    id: "l1",
+    card_id: "card-1",
+    url: "https://example.com",
+    og_title: "Example",
+    og_description: words,
+    og_image_url: null,
+    created_at: "2026-08-13T10:00:00.000Z",
+  };
+  const b = cardToBookmark(card, [], [link]);
+  assert.equal(b.readTimeMin, 2); // 400 слов / 200 wpm = 2
+});
+
+test("readTimeMin: 0 когда нет контента", () => {
+  const card = stubCard({ source_type: "link" });
+  const b = cardToBookmark(card, [], []);
+  assert.equal(b.readTimeMin, 0);
+});

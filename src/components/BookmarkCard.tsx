@@ -1,8 +1,8 @@
 "use client";
 
 import { motion, PanInfo, useMotionValue, useTransform, animate } from "framer-motion";
-import { useRef, useState } from "react";
-import { Play, Sparkles } from "lucide-react";
+import { useRef, useState, useEffect } from "react";
+import { Play, Sparkles, Timer, FileText, Loader2 } from "lucide-react";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 import { useTelegram } from "@/components/TelegramProvider";
 import {
@@ -11,6 +11,7 @@ import {
   FailedActions,
   CardSkeleton,
 } from "@/components/SourceBadge";
+import { fmtDuration, fmtReadMinutes } from "@/lib/format";
 
 export type SwipeDirection = "left" | "right" | "up";
 
@@ -46,6 +47,11 @@ export function BookmarkCard({
   const dragged = useRef(false);
   const [mediaIndex, setMediaIndex] = useState(0);
   const [imgError, setImgError] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [summaryText, setSummaryText] = useState<string | null>(null);
+  const [summaryDone, setSummaryDone] = useState(false);
+  const [aiAvailable, setAiAvailable] = useState<boolean | null>(null);
   const telegram = useTelegram();
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -74,6 +80,45 @@ export function BookmarkCard({
   const shownSrc = fallbackSrc && imgError ? fallbackSrc : imageSrc;
 
   const favicon = faviconUrl(bookmark.domain);
+
+  useEffect(() => {
+    if (aiAvailable !== null || bookmark.aiSummary) return;
+    let cancelled = false;
+    fetch("/api/settings/ai")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled) {
+          setAiAvailable(Boolean(data?.hasKey && data?.mode !== "off"));
+        }
+      })
+      .catch(() => !cancelled && setAiAvailable(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [aiAvailable, bookmark.aiSummary]);
+
+  const requestSummary = async () => {
+    if (summaryLoading || summaryDone) return;
+    setSummaryLoading(true);
+    setSummaryError(null);
+    try {
+      const res = await fetch(`/api/cards/${bookmark.id}/summary`, { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.summary) {
+          setSummaryText(data.summary);
+          setSummaryDone(true);
+        }
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setSummaryError(data.error || "Ошибка");
+      }
+    } catch {
+      setSummaryError("Сеть недоступна");
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
 
   if (bookmark.metaStatus === "processing") {
     return <CardSkeleton />;
@@ -147,8 +192,7 @@ export function BookmarkCard({
 
         {isVideo && durationSeconds != null && durationSeconds > 0 && (
           <div className="absolute bottom-3 right-3 rounded-lg bg-black/70 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-white backdrop-blur-sm">
-            {Math.floor(durationSeconds / 60)}:
-            {String(durationSeconds % 60).padStart(2, "0")}
+            {fmtDuration(durationSeconds)}
           </div>
         )}
 
@@ -204,11 +248,21 @@ export function BookmarkCard({
 
       {/* Info Area */}
       <div className="flex-shrink-0 p-5">
-        <h2 className="text-xl font-bold leading-snug text-text line-clamp-2">
+        <h2 className="text-fs-title font-semibold leading-snug text-text line-clamp-3">
           {bookmark.title || "Без заголовка"}
         </h2>
-        {bookmark.description && (
-          <p className="mt-2 text-sm text-muted line-clamp-3">
+        {summaryText && (
+          <p className="mt-1.5 text-fs-summary text-muted line-clamp-2">
+            {summaryText}
+          </p>
+        )}
+        {bookmark.aiSummary && !summaryText && (
+          <p className="mt-1.5 text-fs-summary text-muted line-clamp-2">
+            {bookmark.aiSummary}
+          </p>
+        )}
+        {bookmark.description && !bookmark.aiSummary && (
+          <p className="mt-1.5 text-fs-summary text-muted line-clamp-3">
             {bookmark.description}
           </p>
         )}
@@ -218,22 +272,64 @@ export function BookmarkCard({
             AI: {bookmark.aiFolderName}
           </div>
         )}
+        {!bookmark.aiSummary && !summaryDone && aiAvailable && (
+          <div className="mt-2">
+            {summaryLoading ? (
+              <div className="flex items-center gap-2 rounded-lg bg-surface px-3 py-2">
+                <Loader2 className="size-3.5 animate-spin text-muted" />
+                <span className="text-fs-sm text-muted">Составляю саммари…</span>
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    requestSummary();
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-line bg-surface/60 px-3 py-1.5 text-fs-sm font-medium text-muted transition-colors hover:border-accent/40 hover:text-accent active:scale-95"
+                >
+                  <Sparkles className="size-3.5" />
+                  Саммари
+                </button>
+                {summaryError && (
+                  <p className="mt-1 text-fs-sm text-danger">{summaryError}</p>
+                )}
+              </>
+            )}
+          </div>
+        )}
         {metaFailed && (
           <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-danger/10 px-2 py-1 text-xs font-medium text-danger">
             ⚠️ Метаданные не загружены
           </div>
         )}
-        <div className="mt-auto flex items-center gap-1.5 pt-4">
-          {favicon ? (
-            <img
-              src={favicon}
-              alt=""
-              className="size-4 rounded-[3px]"
-              onError={(e) => { e.currentTarget.style.display = "none"; }}
-            />
-          ) : null}
-          <span className="truncate text-xs font-semibold uppercase tracking-wider text-muted">
-            {bookmark.domain || "ссылка"}
+        <div className="mt-auto flex items-center gap-3 pt-4">
+          <span className="flex min-w-0 items-center gap-1.5">
+            {favicon ? (
+              <img
+                src={favicon}
+                alt=""
+                className="size-4 rounded-[3px]"
+                onError={(e) => { e.currentTarget.style.display = "none"; }}
+              />
+            ) : null}
+            <span className="truncate text-fs-sm font-semibold uppercase tracking-wider text-muted">
+              {bookmark.domain || "ссылка"}
+            </span>
+          </span>
+          <span className="ml-auto flex items-center gap-2">
+            {isVideo && durationSeconds != null && durationSeconds > 0 && (
+              <span className="flex items-center gap-1 rounded-md bg-surface px-1.5 py-0.5 text-fs-sm font-medium tabular-nums text-muted">
+                <Timer className="size-3.5" />
+                {fmtDuration(durationSeconds)}
+              </span>
+            )}
+            {bookmark.readTimeMin > 0 && !isVideo && (
+              <span className="flex items-center gap-1 rounded-md bg-surface px-1.5 py-0.5 text-fs-sm font-medium tabular-nums text-muted">
+                <FileText className="size-3.5" />
+                {fmtReadMinutes(bookmark.readTimeMin)}
+              </span>
+            )}
           </span>
         </div>
         {metaFailed && (

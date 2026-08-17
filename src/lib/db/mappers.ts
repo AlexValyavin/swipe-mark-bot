@@ -63,6 +63,16 @@ function fileUrl(fileId: string | null | undefined): string | undefined {
  * mediaItems строятся из attachments; top-level imageUrl/videoUrl достаются
  * из первой медиа (для обратной совместимости с BookmarkCard/getOpenTarget).
  */
+function estimateReadMinutes(card: CardRow, description?: string | null): number | null {
+  if (card.estimated_minutes != null && card.estimated_minutes > 0) {
+    return Math.max(1, Math.round(card.estimated_minutes));
+  }
+  const content = [description, card.text, card.title].filter(Boolean).join(" ");
+  const words = content.trim().split(/\s+/).filter(Boolean).length;
+  if (words < 40) return null;
+  return Math.max(1, Math.ceil(words / 200));
+}
+
 export function cardToBookmark(
   card: CardRow,
   attachments: AttachmentRow[],
@@ -128,7 +138,7 @@ export function cardToBookmark(
     createdAt: card.created_at,
     domain: card.domain ?? undefined,
     swipedCount: 0,
-    readTimeMin: 1,
+    readTimeMin: estimateReadMinutes(card, firstLink?.og_description ?? card.text) ?? 0,
     ...(folders.length > 0 ? { folders } : {}),
     ...(tags.length > 0 ? { tags } : {}),
     ...(card.ai_status && card.ai_status !== "none"
