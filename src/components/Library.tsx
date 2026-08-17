@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Plus,
@@ -15,6 +15,7 @@ import {
   Tag,
   Check,
   Sparkles,
+  Loader2,
   Inbox,
   CheckCheck,
   Bot,
@@ -388,11 +389,33 @@ export function Library({
         body: JSON.stringify({ cardIds: [...selectedIds] }),
       });
       const data = await res.json();
-      if (!res.ok) {
+      if (!res.ok || data.error) {
         telegram?.haptic.notification("error");
         return;
       }
-      telegram?.haptic.notification("success");
+      if (!data.jobId) {
+        // карточек нет — просто обновляем
+        telegram?.haptic.selection();
+        exitSelect();
+        await load();
+        return;
+      }
+      // Поллим job до завершения.
+      let running = true;
+      while (running) {
+        await new Promise((r) => setTimeout(r, 2000));
+        try {
+          const s = await fetch(`/api/cards/bulk-ai/${data.jobId}`);
+          const j = await s.json();
+          if (s.ok && j.status !== "running") {
+            running = false;
+            telegram?.haptic.notification(j.status === "done" ? "success" : "warning");
+          }
+        } catch {
+          running = false;
+          telegram?.haptic.notification("error");
+        }
+      }
       exitSelect();
       await load();
     } catch {
@@ -604,10 +627,16 @@ export function Library({
         )}
       </AnimatePresence>
 
-      {/* Автосортировка — sheet-заглушка (шаг 3) */}
+      {/* Автосортировка — sheet (шаг 3) */}
       <AnimatePresence>
         {autosortOpen && (
-          <AutosortSheet count={unsortedCount} onClose={() => setAutosortOpen(false)} />
+          <AutosortSheet
+            count={unsortedCount}
+            onClose={() => setAutosortOpen(false)}
+            onDone={() => {
+              void load();
+            }}
+          />
         )}
       </AnimatePresence>
 
@@ -1428,8 +1457,93 @@ function FiltersSheet({
   );
 }
 
-function AutosortSheet({ count, onClose }: { count: number; onClose: () => void }) {
+function AutosortSheet({
+  count,
+  onClose,
+  onDone,
+}: {
+  count: number;
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const telegram = useTelegram();
+  const [starting, setStarting] = useState(false);
+  const [job, setJob] = useState<{
+    jobId: string | null;
+    status: string;
+    total: number;
+    done: number;
+    failed: number;
+  } | null>(null);
+  const pollRef = useRef<number | null>(null);
+
+  const stopPolling = () => {
+    if (pollRef.current !== null) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
+
+  const start = async () => {
+    setStarting(true);
+    try {
+      const res = await fetch("/api/cards/bulk-ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope: "unsorted" }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Ошибка запуска");
+      setJob(data);
+      telegram?.haptic.impact("medium");
+      pollRef.current = window.setInterval(async () => {
+        try {
+          const r = await fetch(`/api/cards/bulk-ai/${data.jobId}`);
+          const j = await r.json();
+          if (r.ok && !j.error) {
+            setJob(j);
+            if (j.status !== "running") {
+              stopPolling();
+              telegram?.haptic.notification(j.status === "done" ? "success" : "warning");
+              onDone();
+            }
+          }
+        } catch {
+          // сеть упала — просто не обновляем, следующий тик
+        }
+      }, 2000);
+    } catch (e) {
+      telegram?.haptic.notification("error");
+      setStarting(false);
+      if (e instanceof Error && e.message) {
+        // показываем ошибку в самом sheet
+        setJob({ jobId: null, status: "error", total: 0, done: 0, failed: 0 });
+      }
+    }
+  };
+
+  const cancel = async () => {
+    stopPolling();
+    if (job?.jobId) {
+      try {
+        await fetch(`/api/cards/bulk-ai/${job.jobId}/cancel`, { method: "POST" });
+      } catch {
+        // молча
+      }
+    }
+    setJob((prev) => (prev ? { ...prev, status: "cancelled" } : prev));
+    telegram?.haptic.impact("light");
+    onDone();
+  };
+
+  useEffect(() => () => stopPolling(), []);
+
+  const running = job?.status === "running";
+  const total = job?.total ?? count;
+  const done = job?.done ?? 0;
+  const failed = job?.failed ?? 0;
+  const progress = total > 0 ? Math.min(100, Math.round(((done + failed) / total) * 100)) : 0;
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -1452,20 +1566,125 @@ function AutosortSheet({ count, onClose }: { count: number; onClose: () => void 
           </div>
           <div>
             <h2 className="text-base font-bold text-text">Автосортировка</h2>
-            <p className="text-xs text-muted">Карточек без папки: {count}</p>
+            <p className="text-xs text-muted">
+              {job ? `Карточек в очереди: ${total}` : `Карточек без папки: ${count}`}
+            </p>
           </div>
         </div>
-        <p className="mt-4 rounded-xl bg-bg px-4 py-3 text-sm text-muted">
-          ✨ Функция появится в следующем обновлении — распределим всё по папкам в один тап.
-        </p>
-        <div className="mt-5 flex gap-2.5">
-          <button
-            onClick={onClose}
-            className="flex-1 rounded-full bg-accent py-2.5 text-sm font-semibold text-accent-text"
-          >
-            Понятно
-          </button>
-        </div>
+
+        {!job && !starting && (
+          <>
+            <p className="mt-4 rounded-xl bg-bg px-4 py-3 text-sm text-muted">
+              ИИ распределит карточки по твоим папкам и предложит теги. Каждая карточка — один
+              запрос к твоему ключу.
+            </p>
+            <div className="mt-5 flex gap-2.5">
+              <button
+                onClick={onClose}
+                className="flex-1 rounded-full border border-line py-2.5 text-sm font-semibold text-text active:scale-[0.98]"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => void start()}
+                className="flex-1 rounded-full bg-accent py-2.5 text-sm font-semibold text-accent-text active:scale-[0.98]"
+              >
+                Распределить {count > 0 ? `(${count})` : ""}
+              </button>
+            </div>
+          </>
+        )}
+
+        {starting && !job && (
+          <div className="mt-5 flex flex-col items-center gap-3 py-4">
+            <Loader2 className="size-6 animate-spin text-accent" />
+            <p className="text-sm text-muted">Запускаем…</p>
+          </div>
+        )}
+
+        {job && (
+          <div className="mt-4">
+            {running && (
+              <>
+                <div className="flex items-center justify-between text-xs text-muted">
+                  <span className="flex items-center gap-1.5">
+                    <Loader2 className="size-3.5 animate-spin" />
+                    Обработано {done + failed} из {total}
+                  </span>
+                  <span>{progress}%</span>
+                </div>
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-bg">
+                  <motion.div
+                    className="h-full rounded-full bg-accent"
+                    initial={false}
+                    animate={{ width: `${progress}%` }}
+                    transition={{ duration: 0.3 }}
+                  />
+                </div>
+                {failed > 0 && (
+                  <p className="mt-1.5 text-xs text-muted">Не удалось: {failed}</p>
+                )}
+                <div className="mt-5 flex gap-2.5">
+                  <button
+                    onClick={() => void cancel()}
+                    className="flex-1 rounded-full border border-line py-2.5 text-sm font-semibold text-text active:scale-[0.98]"
+                  >
+                    Отменить
+                  </button>
+                </div>
+              </>
+            )}
+
+            {job.status === "done" && (
+              <>
+                <p className="mt-4 rounded-xl bg-success/10 px-4 py-3 text-sm text-text">
+                  Готово! Распределено {done} карточек
+                  {failed > 0 ? `, не удалось ${failed}` : ""}.
+                </p>
+                <div className="mt-5 flex gap-2.5">
+                  <button
+                    onClick={onClose}
+                    className="flex-1 rounded-full bg-accent py-2.5 text-sm font-semibold text-accent-text active:scale-[0.98]"
+                  >
+                    Отлично
+                  </button>
+                </div>
+              </>
+            )}
+
+            {job.status === "cancelled" && (
+              <>
+                <p className="mt-4 rounded-xl bg-bg px-4 py-3 text-sm text-muted">
+                  Остановлено. Успели распределить {done} из {total}.
+                </p>
+                <div className="mt-5 flex gap-2.5">
+                  <button
+                    onClick={onClose}
+                    className="flex-1 rounded-full bg-accent py-2.5 text-sm font-semibold text-accent-text active:scale-[0.98]"
+                  >
+                    Понятно
+                  </button>
+                </div>
+              </>
+            )}
+
+            {job.status === "error" && (
+              <>
+                <p className="mt-4 rounded-xl bg-danger/10 px-4 py-3 text-sm text-text">
+                  Что-то пошло не так. Попробуй ещё раз.
+                </p>
+                <div className="mt-5 flex gap-2.5">
+                  <button
+                    onClick={onClose}
+                    className="flex-1 rounded-full bg-accent py-2.5 text-sm font-semibold text-accent-text active:scale-[0.98]"
+                  >
+                    Понятно
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </motion.div>
     </motion.div>
   );

@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { getSessionUser } from "@/lib/session";
 import { getAdminDb } from "@/lib/db/supabase";
 import { enrichCard } from "@/lib/ai/enrich";
+import { createBulkJob, getBulkJob, updateBulkJob, bulkJobStatusToClient } from "@/lib/db/jobs";
 
 export const runtime = "nodejs";
-const BULK_TIMEOUT_MS = 12_000;
 const MAX_BULK = 30;
+const CHUNK_SIZE = 5;
 
 async function findUnsortedCardIds(userId: string): Promise<string[]> {
   const db = getAdminDb();
@@ -24,6 +26,17 @@ async function findUnsortedCardIds(userId: string): Promise<string[]> {
     .map((c) => c.id)
     .filter((id) => !excluded.has(id))
     .slice(0, MAX_BULK);
+}
+
+async function verifyOwnership(userId: string, cardIds: string[]): Promise<string[]> {
+  const { data: owned, error } = await getAdminDb()
+    .from("cards")
+    .select("id")
+    .eq("user_id", userId)
+    .in("id", cardIds);
+  if (error) throw error;
+  const ownedSet = new Set((owned ?? []).map((c) => c.id));
+  return cardIds.filter((id) => ownedSet.has(id));
 }
 
 export async function POST(req: NextRequest) {
@@ -49,47 +62,47 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Bad request" }, { status: 400 });
     }
 
-    // Проверяем принадлежность карточек пользователю.
-    const { data: owned, error } = await getAdminDb()
-      .from("cards")
-      .select("id")
-      .eq("user_id", userId)
-      .in("id", cardIds);
-    if (error) throw error;
-    const ownedSet = new Set((owned ?? []).map((c) => c.id));
-    cardIds = cardIds.filter((id) => ownedSet.has(id));
-
+    cardIds = await verifyOwnership(userId, cardIds);
     if (cardIds.length === 0) {
-      return NextResponse.json({ processed: 0, failed: 0 });
+      return NextResponse.json({ jobId: null, total: 0, done: 0, failed: 0, status: "done" });
     }
 
-    let processed = 0;
-    let failed = 0;
-    const failures: string[] = [];
-    for (const id of cardIds) {
-      const timer = setTimeout(() => {}, BULK_TIMEOUT_MS);
+    const job = await createBulkJob(userId, cardIds.length);
+
+    // Фоновая обработка чанками: прогресс в БД, поллинг с клиента.
+    after(async () => {
+      let done = 0;
+      let failed = 0;
       try {
-        const outcome = await enrichCard(userId, id);
-        if (outcome.status === "done") {
-          processed++;
-        } else {
-          failed++;
-          failures.push(id);
+        for (let i = 0; i < cardIds.length; i += CHUNK_SIZE) {
+          const chunk = cardIds.slice(i, i + CHUNK_SIZE);
+          const results = await Promise.allSettled(chunk.map((id) => enrichCard(userId, id)));
+          for (const r of results) {
+            if (r.status === "fulfilled" && r.value.status === "done") {
+              done++;
+            } else {
+              failed++;
+            }
+          }
+          const current = await getBulkJob(userId, job.id);
+          if (current && current.status === "cancelled") {
+            await updateBulkJob(job.id, { done, failed });
+            return;
+          }
+          await updateBulkJob(job.id, { done, failed });
         }
+        await updateBulkJob(job.id, { done, failed, status: "done" });
       } catch (e) {
-        failed++;
-        failures.push(id);
-        console.error(`Bulk AI failed for card ${id}:`, e);
-      } finally {
-        clearTimeout(timer);
+        console.error("Bulk AI job error:", e);
+        try {
+          await updateBulkJob(job.id, { done, failed, status: "error" });
+        } catch {
+          // молча
+        }
       }
-    }
-
-    return NextResponse.json({
-      processed,
-      failed,
-      failedIds: failures,
     });
+
+    return NextResponse.json(bulkJobStatusToClient(job));
   } catch (e) {
     console.error("Bulk AI error:", e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
