@@ -1,8 +1,9 @@
 "use client";
 
-import { motion, PanInfo, useMotionValue, useTransform, animate } from "framer-motion";
+import { motion, PanInfo, useMotionValue, useTransform, animate, AnimatePresence } from "framer-motion";
 import { useRef, useState, useEffect } from "react";
-import { Play, Sparkles, Timer, FileText, Loader2 } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Play, Sparkles, Timer, FileText, Loader2, X, ExternalLink } from "lucide-react";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 import { useTelegram } from "@/components/TelegramProvider";
 import {
@@ -12,6 +13,7 @@ import {
   CardSkeleton,
 } from "@/components/SourceBadge";
 import { fmtDuration, fmtReadMinutes } from "@/lib/format";
+import { getOpenTarget } from "@/lib/openTarget";
 
 export type SwipeDirection = "left" | "right" | "up";
 
@@ -52,6 +54,7 @@ export function BookmarkCard({
   const [summaryText, setSummaryText] = useState<string | null>(null);
   const [summaryDone, setSummaryDone] = useState(false);
   const [aiAvailable, setAiAvailable] = useState<boolean | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const telegram = useTelegram();
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -252,14 +255,26 @@ export function BookmarkCard({
           {bookmark.title || "Без заголовка"}
         </h2>
         {summaryText && (
-          <p className="mt-1.5 text-fs-summary text-muted line-clamp-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setSheetOpen(true);
+            }}
+            className="mt-1.5 block w-full text-left text-fs-summary text-muted line-clamp-2"
+          >
             {summaryText}
-          </p>
+          </button>
         )}
         {bookmark.aiSummary && !summaryText && (
-          <p className="mt-1.5 text-fs-summary text-muted line-clamp-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setSheetOpen(true);
+            }}
+            className="mt-1.5 block w-full text-left text-fs-summary text-muted line-clamp-2"
+          >
             {bookmark.aiSummary}
-          </p>
+          </button>
         )}
         {bookmark.description && !bookmark.aiSummary && (
           <p className="mt-1.5 text-fs-summary text-muted line-clamp-3">
@@ -361,6 +376,68 @@ export function BookmarkCard({
           />
         </>
       )}
+
+      {/* Полное саммари: sheet снизу (портал в body — родитель имеет transform) */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {sheetOpen && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm"
+                onClick={() => setSheetOpen(false)}
+              >
+                <motion.div
+                  initial={{ y: 60, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 60, opacity: 0 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  className="flex max-h-[75dvh] w-full max-w-sm flex-col rounded-t-3xl border border-line bg-surface p-5 sm:rounded-3xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <Sparkles className="size-4 shrink-0 text-accent" />
+                      <span className="truncate text-fs-title font-semibold text-text">
+                        {bookmark.title || "Без заголовка"}
+                      </span>
+                    </span>
+                    <button
+                      onClick={() => setSheetOpen(false)}
+                      aria-label="Закрыть"
+                      className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface text-muted transition-colors hover:text-text active:scale-90"
+                    >
+                      <X className="size-5" />
+                    </button>
+                  </div>
+
+                  <p className="mt-4 text-fs-base leading-relaxed text-text whitespace-pre-line overflow-y-auto hide-scrollbar">
+                    {summaryText ?? bookmark.aiSummary ?? bookmark.description ?? "Саммари недоступно"}
+                  </p>
+
+                  <div className="mt-5 flex items-center justify-between gap-2 border-t border-line pt-4">
+                    <span className="text-fs-sm text-muted">
+                      {bookmark.domain || "ссылка"}
+                    </span>
+                    <button
+                      onClick={() => {
+                        const target = getOpenTarget(bookmark);
+                        if (target) window.open(target, "_blank", "noopener,noreferrer");
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-fs-sm font-semibold text-accent-text active:scale-95"
+                    >
+                      <ExternalLink className="size-4" />
+                      Открыть
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
     </motion.div>
   );
 }

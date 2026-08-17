@@ -13,9 +13,11 @@ function deriveTitle(url: string): string {
     const path = decodeURIComponent(u.pathname.replace(/\/$/, ""));
     const last = path.split("/").filter(Boolean).pop();
     if (last && !/^\d+$/.test(last) && last.length > 2) {
-      return last.replace(/[-_]+/g, " ").slice(0, 120);
+      const slug = last.replace(/[-_]+/g, " ").trim();
+      // Кириллица читается как есть; латинский слаг (транслит) → hostname.
+      if (/[\u0400-\u04FF]/.test(slug)) return slug.slice(0, 120);
     }
-    return u.hostname;
+    return u.hostname.replace(/^www\./, "");
   } catch {
     return "Ссылка";
   }

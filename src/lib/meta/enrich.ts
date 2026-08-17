@@ -101,9 +101,14 @@ async function applyMeta(
     }
   }
 
-  // 2. Дублируем в карточку, только если поля пустые.
+  // 2. Дублируем в карточку, только если поля пустые
+  // (либо title — временный hostname от ручного добавления ссылки).
   const cardPatch: Partial<CardRow> = {};
-  if (!card.title && meta.title) cardPatch.title = meta.title;
+  const isPlaceholderTitle =
+    !!card.domain &&
+    card.title != null &&
+    card.title.replace(/^www\./, "") === card.domain.replace(/^www\./, "");
+  if (meta.title && (isPlaceholderTitle || !card.title)) cardPatch.title = meta.title;
   if (!card.image_url && meta.image_url) cardPatch.image_url = meta.image_url;
   if (card.duration_seconds == null && meta.duration_seconds != null) {
     cardPatch.duration_seconds = meta.duration_seconds;
