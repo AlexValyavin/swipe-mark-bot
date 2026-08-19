@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
 import { getForUser, updateCard } from "@/lib/db/cards";
 import {
-  countRightSwipes,
   getLatestStatusChange,
   hasIdempotencyKey,
   logAction,
@@ -48,19 +47,15 @@ export async function POST(req: NextRequest) {
 
     let newStatus = currentStatus;
     let deferUntil: string | null = null;
-    let rightCount: number | null = null;
 
     switch (action as SwipeActionName) {
       case "left":
         newStatus = "archived";
         break;
       case "right":
-        rightCount = (await countRightSwipes(cardId)) + 1;
-        if (rightCount >= 5) {
-          newStatus = "archived";
-        } else {
-          newStatus = "new";
-        }
+        // Вправо = «оставить на потом»: карточка уходит из колоды на сутки.
+        newStatus = "later";
+        deferUntil = new Date(now + 24 * 60 * 60 * 1000).toISOString();
         break;
       case "done":
         newStatus = "done";
@@ -97,7 +92,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       status: newStatus,
-      rightCount: rightCount === null ? undefined : rightCount,
     });
   } catch (e) {
     console.error("Actions error:", e);

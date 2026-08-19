@@ -67,6 +67,7 @@ export default function Home() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [deck, setDeck] = useState<Bookmark[]>([]);
   const [archived, setArchived] = useState<Bookmark[]>([]);
+  const [later, setLater] = useState<Bookmark[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("inbox");
@@ -91,6 +92,7 @@ export default function Home() {
     return localStorage.getItem("swipe-hint-seen") === "1";
   });
   const [lastSwipe, setLastSwipe] = useState<Bookmark | null>(null);
+  const [undoLabel, setUndoLabel] = useState("В архив");
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [navHidden, setNavHidden] = useState(false);
   const swipedOnce = useRef(false);
@@ -147,6 +149,13 @@ export default function Home() {
         return false;
       })
     );
+    setLater(
+      all.filter((b) => {
+        const s = b.status || "new";
+        if (s !== "later") return false;
+        return !b.deferUntil || new Date(b.deferUntil).getTime() > now;
+      })
+    );
     setArchived(all.filter((b) => (b.status || "new") === "archived"));
   };
 
@@ -196,19 +205,16 @@ export default function Home() {
     } else {
       telegram?.haptic.impact("light");
       setDeck((prev) => prev.filter((b) => b.id !== bookmark.id));
+      setLater((prev) => [bookmark, ...prev.filter((b) => b.id !== bookmark.id)]);
+      showUndoToast(bookmark, "Отложено");
       const res = await postAction(bookmark.id, "right");
-      if (res?.status === "archived") {
-        setArchived((prev) => [...prev, bookmark]);
-        showUndoToast(bookmark);
-      } else {
-        setDeck((prev) => [...prev, bookmark]);
-      }
       if (!res) loadBookmarks();
     }
   };
 
-  const showUndoToast = (bookmark: Bookmark) => {
+  const showUndoToast = (bookmark: Bookmark, label = "В архив") => {
     setLastSwipe(bookmark);
+    setUndoLabel(label);
     if (undoTimer.current) clearTimeout(undoTimer.current);
     undoTimer.current = setTimeout(() => setLastSwipe(null), 4000);
   };
@@ -224,6 +230,7 @@ export default function Home() {
     }
     setLibrarySignal((s) => s + 1);
     setArchived((prev) => prev.filter((x) => x.id !== bm.id));
+    setLater((prev) => prev.filter((x) => x.id !== bm.id));
     setDeck((prev) => [bm, ...prev.filter((x) => x.id !== bm.id)]);
     postAction(bm.id, "undo");
   };
@@ -851,7 +858,7 @@ export default function Home() {
             transition={{ type: "spring", stiffness: 320, damping: 26 }}
             className="fixed bottom-20 left-1/2 z-40 -translate-x-1/2 flex items-center gap-2 rounded-full border border-line bg-surface/95 py-2 pl-4 pr-2 shadow-2xl backdrop-blur-sm"
           >
-            <span className="text-fs-sm text-text">В архив</span>
+            <span className="text-fs-sm text-text">{undoLabel}</span>
             <button
               onClick={undoLastSwipe}
               className="rounded-full bg-accent px-3 py-1 text-fs-sm font-semibold text-accent-text transition-colors active:scale-95"

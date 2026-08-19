@@ -36,16 +36,6 @@ export async function logAction(input: {
   if (error) throw error;
 }
 
-export async function countRightSwipes(cardId: string): Promise<number> {
-  const { count, error } = await getAdminDb()
-    .from("swipe_actions")
-    .select("id", { count: "exact", head: true })
-    .eq("card_id", cardId)
-    .eq("action", "right");
-  if (error) throw error;
-  return count ?? 0;
-}
-
 export async function getLatestStatusChange(
   cardId: string
 ): Promise<{ action: SwipeActionName; previous_status: string | null } | null> {
