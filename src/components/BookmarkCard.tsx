@@ -59,12 +59,14 @@ export function BookmarkCard({
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotate = useTransform(x, [-200, 200], [-12, 12]);
-  // Стикеры появляются плавнее: рассинхронизированные диапазоны
-  const archiveOpacity = useTransform(x, [-220, -60], [1, 0]);
-  const laterOpacity = useTransform(x, [60, 220], [0, 1]);
-  // Подсветка края при перетаскивании
-  const leftGlow = useTransform(x, [-220, -40], [0.9, 0]);
-  const rightGlow = useTransform(x, [40, 220], [0, 0.9]);
+  // Стикеры с градацией: появляются от 0 до ~порога свайпа, усиливаются к 100%
+  const archiveOpacity = useTransform(x, [-40, -110], [0, 1]);
+  const laterOpacity = useTransform(x, [40, 110], [0, 1]);
+  const archiveScale = useTransform(x, [-40, -110], [0.8, 1.15]);
+  const laterScale = useTransform(x, [40, 110], [0.8, 1.15]);
+  // Подсветка края нарастает с движением
+  const leftGlow = useTransform(x, [-30, -110], [0, 0.9]);
+  const rightGlow = useTransform(x, [30, 110], [0, 0.9]);
 
   const items = bookmark.mediaItems && bookmark.mediaItems.length > 0
     ? bookmark.mediaItems
@@ -262,6 +264,7 @@ export function BookmarkCard({
             }}
             className="mt-1.5 block w-full text-left text-fs-summary text-muted line-clamp-2"
           >
+            <span className="font-semibold text-text">Кратко: </span>
             {summaryText}
           </button>
         )}
@@ -273,6 +276,7 @@ export function BookmarkCard({
             }}
             className="mt-1.5 block w-full text-left text-fs-summary text-muted line-clamp-2"
           >
+            <span className="font-semibold text-text">Кратко: </span>
             {bookmark.aiSummary}
           </button>
         )}
@@ -355,13 +359,13 @@ export function BookmarkCard({
       {interactive && (
         <>
           <motion.div
-            style={{ opacity: archiveOpacity }}
+            style={{ opacity: archiveOpacity, scale: archiveScale }}
             className="absolute top-6 right-6 border-2 border-rose-500 text-rose-500 px-3 py-1 rounded-lg rotate-12 font-black bg-black/40"
           >
             АРХИВ
           </motion.div>
           <motion.div
-            style={{ opacity: laterOpacity }}
+            style={{ opacity: laterOpacity, scale: laterScale }}
             className="absolute top-6 left-6 border-2 border-emerald-400 text-emerald-400 px-3 py-1 rounded-lg -rotate-12 font-black bg-black/40"
           >
             ОСТАВИТЬ
