@@ -77,6 +77,26 @@ body {
   font-size: 16px;
   box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
 }
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lang-toggle {
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.lang-toggle:hover {
+  color: var(--text);
+  background: var(--line);
+}
 .nav-cta {
   color: var(--text);
   text-decoration: none;
