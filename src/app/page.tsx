@@ -991,8 +991,12 @@ export default function Home() {
                     Архивные карточки доступны в «Сохранёнки» → вкладка «Архив».
                   </p>
                 </div>
-                <AiSettings />
-                <DiagnosticsSettings />
+                <div className="px-5 pb-5 pt-1">
+                  <AiSettings />
+                </div>
+                <div className="px-5 pb-5">
+                  <DiagnosticsSettings />
+                </div>
               </div>
             </motion.div>
           </motion.div>

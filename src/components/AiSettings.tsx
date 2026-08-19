@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import { useTelegram } from "@/components/TelegramProvider";
 import { PairingSettings } from "@/components/PairingSettings";
 import { Eye, EyeOff, Loader2, RefreshCw, Check, Trash2 } from "lucide-react";
@@ -58,6 +59,7 @@ export function AiSettings() {
   } | null>(null);
   const [testing, setTesting] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   const load = async () => {
     try {
@@ -186,238 +188,282 @@ export function AiSettings() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-5 hide-scrollbar">
-      {/* Telegram pairing */}
-      <PairingSettings />
-
-      {/* Provider */}
-      <h2 className="mt-6 text-xs font-semibold uppercase tracking-wider text-muted">
-        AI-провайдер
-      </h2>
-      <div className="mt-2 grid grid-cols-2 gap-2">
-        {Object.entries(PROVIDER_LABELS).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => {
-              telegram?.haptic.selection();
-              void save({ provider: key });
-            }}
-            className={`rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
-              state.provider === key
-                ? "bg-accent text-accent-text"
-                : "bg-surface text-muted hover:text-text"
+    <div className="flex-1 overflow-y-auto hide-scrollbar">
+      {/* Compact AI header */}
+      <div className="rounded-2xl border border-line bg-surface p-4">
+        <button
+          onClick={() => {
+            telegram?.haptic.selection();
+            setExpanded((v) => !v);
+          }}
+          className="flex w-full items-center gap-3 text-left"
+        >
+          <span className="flex size-10 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-500/15 text-lg">
+            ✨
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-text">AI-помощник</span>
+            <span className="block truncate text-xs text-muted">
+              {state.hasKey
+                ? `${PROVIDER_LABELS[state.provider] ?? state.provider} · ${MODE_LABELS[state.mode]}`
+                : "Не настроен — для умной сортировки"}
+            </span>
+          </span>
+          <span
+            className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium ${
+              state.hasKey
+                ? "bg-emerald-500/10 text-emerald-500"
+                : "bg-line text-muted"
             }`}
           >
-            {label}
-          </button>
-        ))}
-      </div>
+            {state.hasKey ? "Включён" : "Выкл"}
+            <span className={`transition-transform ${expanded ? "rotate-180" : ""}`}>▾</span>
+          </span>
+        </button>
 
-      {/* Custom base URL */}
-      {state.provider === "custom" && (
-        <div className="mt-4">
-          <label className="text-xs text-muted">Base URL</label>
-          <input
-            value={customUrl}
-            onChange={(e) => setCustomUrl(e.target.value)}
-            onBlur={() => {
-              if (customUrl.trim() !== (state.customBaseUrl ?? "")) {
-                void save({ customBaseUrl: customUrl });
-              }
-            }}
-            placeholder="https://host:port"
-            className="mt-1.5 w-full rounded-xl bg-surface px-4 py-3 text-sm text-text placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-accent"
-          />
-          <p className="mt-1 text-xs text-muted">
-            Например: http://localhost:11434 (порт — часть URL, без протокола подставится http://)
-          </p>
-        </div>
-      )}
-
-      {/* Model */}
-      <div className="mt-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
-            Модель
-          </h2>
-          <button
-            onClick={() => {
-              telegram?.haptic.selection();
-              setManualModel((v) => !v);
-            }}
-            className="text-xs text-accent"
+        {expanded && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
           >
-            {manualModel ? "Авто" : "Вручную"}
-          </button>
-        </div>
-        {manualModel ? (
-          <div className="mt-1.5">
-            <div className="flex items-center gap-2">
-              <input
-                value={state.model}
-                onChange={(e) => setState((s) => ({ ...s, model: e.target.value }))}
-                onBlur={() => {
-                  if (state.model.trim()) void save({ model: state.model.trim() });
-                }}
-                placeholder="model-id"
-                className="w-full rounded-xl bg-surface px-4 py-3 text-sm text-text placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-accent"
-              />
-              <button
-                onClick={() => void loadModels()}
-                disabled={modelsLoading || !state.hasKey}
-                title="Загрузить список моделей"
-                aria-label="Загрузить модели"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent disabled:opacity-40"
-              >
-                <RefreshCw className={`size-4 ${modelsLoading ? "animate-spin" : ""}`} />
-              </button>
-            </div>
+            <div className="pt-4">
+              {/* Telegram pairing */}
+              <PairingSettings />
 
-            {models && models.length > 0 ? (
-              <div className="mt-2 flex max-h-44 flex-col gap-1 overflow-y-auto hide-scrollbar">
-                {models.map((m) => (
+              {/* Provider */}
+              <h2 className="mt-6 text-xs font-semibold uppercase tracking-wider text-muted">
+                AI-провайдер
+              </h2>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {Object.entries(PROVIDER_LABELS).map(([key, label]) => (
                   <button
-                    key={m}
+                    key={key}
                     onClick={() => {
                       telegram?.haptic.selection();
-                      setState((s) => ({ ...s, model: m }));
-                      void save({ model: m });
+                      void save({ provider: key });
                     }}
-                    className={`flex items-center gap-2 rounded-lg bg-bg px-3 py-2 text-left text-sm transition-colors ${
-                      state.model === m ? "text-accent" : "text-text hover:bg-line"
+                    className={`rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
+                      state.provider === key
+                        ? "bg-accent text-accent-text"
+                        : "bg-surface text-muted hover:text-text"
                     }`}
                   >
-                    <span className="flex-1 truncate">{m}</span>
-                    {state.model === m && <Check className="size-4 shrink-0" />}
+                    {label}
                   </button>
                 ))}
               </div>
-            ) : (
-              <div className="mt-2 flex items-center gap-2">
-                <button
-                  onClick={() => void loadModels()}
-                  disabled={modelsLoading || !state.hasKey}
-                  className="text-xs text-accent disabled:opacity-40"
-                >
-                  {modelsLoading ? "Загрузка…" : modelsError ? "Повторить загрузку моделей" : "Загрузить список моделей"}
-                </button>
-                {modelsError && <span className="truncate text-xs text-red-400">{modelsError}</span>}
+
+              {/* Custom base URL */}
+              {state.provider === "custom" && (
+                <div className="mt-4">
+                  <label className="text-xs text-muted">Base URL</label>
+                  <input
+                    value={customUrl}
+                    onChange={(e) => setCustomUrl(e.target.value)}
+                    onBlur={() => {
+                      if (customUrl.trim() !== (state.customBaseUrl ?? "")) {
+                        void save({ customBaseUrl: customUrl });
+                      }
+                    }}
+                    placeholder="https://host:port"
+                    className="mt-1.5 w-full rounded-xl bg-surface px-4 py-3 text-sm text-text placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                  <p className="mt-1 text-xs text-muted">
+                    Например: http://localhost:11434 (порт — часть URL, без протокола подставится http://)
+                  </p>
+                </div>
+              )}
+
+              {/* Model */}
+              <div className="mt-5">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
+                    Модель
+                  </h2>
+                  <button
+                    onClick={() => {
+                      telegram?.haptic.selection();
+                      setManualModel((v) => !v);
+                    }}
+                    className="text-xs text-accent"
+                  >
+                    {manualModel ? "Авто" : "Вручную"}
+                  </button>
+                </div>
+                {manualModel ? (
+                  <div className="mt-1.5">
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={state.model}
+                        onChange={(e) => setState((s) => ({ ...s, model: e.target.value }))}
+                        onBlur={() => {
+                          if (state.model.trim()) void save({ model: state.model.trim() });
+                        }}
+                        placeholder="model-id"
+                        className="w-full rounded-xl bg-surface px-4 py-3 text-sm text-text placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-accent"
+                      />
+                      <button
+                        onClick={() => void loadModels()}
+                        disabled={modelsLoading || !state.hasKey}
+                        title="Загрузить список моделей"
+                        aria-label="Загрузить модели"
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent disabled:opacity-40"
+                      >
+                        <RefreshCw className={`size-4 ${modelsLoading ? "animate-spin" : ""}`} />
+                      </button>
+                    </div>
+
+                    {models && models.length > 0 ? (
+                      <div className="mt-2 flex max-h-44 flex-col gap-1 overflow-y-auto hide-scrollbar">
+                        {models.map((m) => (
+                          <button
+                            key={m}
+                            onClick={() => {
+                              telegram?.haptic.selection();
+                              setState((s) => ({ ...s, model: m }));
+                              void save({ model: m });
+                            }}
+                            className={`flex items-center gap-2 rounded-lg bg-bg px-3 py-2 text-left text-sm transition-colors ${
+                              state.model === m ? "text-accent" : "text-text hover:bg-line"
+                            }`}
+                          >
+                            <span className="flex-1 truncate">{m}</span>
+                            {state.model === m && <Check className="size-4 shrink-0" />}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-2 flex items-center gap-2">
+                        <button
+                          onClick={() => void loadModels()}
+                          disabled={modelsLoading || !state.hasKey}
+                          className="text-xs text-accent disabled:opacity-40"
+                        >
+                          {modelsLoading ? "Загрузка…" : modelsError ? "Повторить загрузку моделей" : "Загрузить список моделей"}
+                        </button>
+                        {modelsError && <span className="truncate text-xs text-red-400">{modelsError}</span>}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-1.5 rounded-xl bg-surface px-4 py-3 text-sm text-text">
+                    {state.model || "Авто (дефолт провайдера)"}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        ) : (
-          <div className="mt-1.5 rounded-xl bg-surface px-4 py-3 text-sm text-text">
-            {state.model || "Авто (дефолт провайдера)"}
-          </div>
+
+              {/* API key */}
+              <div className="mt-5">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
+                  API-ключ
+                </h2>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <div className="flex flex-1 items-center gap-2 rounded-xl bg-surface px-3 py-2.5">
+                    <input
+                      type={showKey ? "text" : "password"}
+                      value={newKey}
+                      onChange={(e) => setNewKey(e.target.value)}
+                      placeholder={state.hasKey ? `Введён: ${state.keyMask ?? "••••"}` : "sk-…"}
+                      autoComplete="off"
+                      className="w-full bg-transparent text-sm text-text placeholder:text-muted focus:outline-none"
+                    />
+                    <button
+                      onClick={() => setShowKey((v) => !v)}
+                      aria-label="Показать/скрыть ключ"
+                      className="text-muted hover:text-text"
+                    >
+                      {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
+                  </div>
+                  {newKey && (
+                    <button
+                      onClick={() => void save({ key: newKey.trim() })}
+                      disabled={saving}
+                      className="rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-accent-text disabled:opacity-50"
+                    >
+                      Сохранить
+                    </button>
+                  )}
+                </div>
+                {state.hasKey && (
+                  <div className="mt-2 flex items-center justify-between">
+                    <p className="text-xs text-success">Ключ сохранён (зашифрован).</p>
+                    <button
+                      onClick={() => void save({ clearKey: true })}
+                      disabled={saving}
+                      className="inline-flex items-center gap-1 rounded-lg bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+                    >
+                      <Trash2 className="size-3.5" />
+                      Удалить
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Test */}
+              <div className="mt-5 flex items-center gap-2">
+                <button
+                  onClick={() => void testConnection()}
+                  disabled={testing || (!state.hasKey && !newKey)}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-accent/15 py-3 text-sm font-semibold text-accent disabled:opacity-40"
+                >
+                  {testing ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-4" />
+                  )}
+                  Проверить
+                </button>
+              </div>
+              {testResult && (
+                <div
+                  className={`mt-2 rounded-xl px-4 py-3 text-sm ${
+                    testResult.ok ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-400"
+                  }`}
+                >
+                  {testResult.ok
+                    ? `✅ OK · ${testResult.model ?? ""} · ${testResult.latencyMs ?? "?"} мс`
+                    : `❌ ${testResult.error ?? "Ошибка"}`}
+                </div>
+              )}
+
+              {/* Mode */}
+              <div className="mt-6">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
+                  Режим AI
+                </h2>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {(Object.keys(MODE_LABELS) as AiMode[]).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => void saveMode(m)}
+                      disabled={!state.hasKey && m !== "off"}
+                      className={`rounded-xl px-3 py-3 text-sm font-medium transition-colors disabled:opacity-40 ${
+                        state.mode === m
+                          ? "bg-accent text-accent-text"
+                          : "bg-surface text-muted hover:text-text"
+                      }`}
+                    >
+                      {MODE_LABELS[m]}
+                    </button>
+                  ))}
+                </div>
+                {!state.hasKey && (
+                  <p className="mt-2 text-xs text-muted">
+                    Для режимов «Предлагать»/«Авто» нужен API-ключ.
+                  </p>
+                )}
+              </div>
+
+              {saveMsg && (
+                <p className="mt-4 text-center text-xs text-muted">{saveMsg}</p>
+              )}
+            </div>
+          </motion.div>
         )}
       </div>
-
-      {/* API key */}
-      <div className="mt-5">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
-          API-ключ
-        </h2>
-        <div className="mt-1.5 flex items-center gap-2">
-          <div className="flex flex-1 items-center gap-2 rounded-xl bg-surface px-3 py-2.5">
-            <input
-              type={showKey ? "text" : "password"}
-              value={newKey}
-              onChange={(e) => setNewKey(e.target.value)}
-              placeholder={state.hasKey ? `Введён: ${state.keyMask ?? "••••"}` : "sk-…"}
-              autoComplete="off"
-              className="w-full bg-transparent text-sm text-text placeholder:text-muted focus:outline-none"
-            />
-            <button
-              onClick={() => setShowKey((v) => !v)}
-              aria-label="Показать/скрыть ключ"
-              className="text-muted hover:text-text"
-            >
-              {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-            </button>
-          </div>
-          {newKey && (
-            <button
-              onClick={() => void save({ key: newKey.trim() })}
-              disabled={saving}
-              className="rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-accent-text disabled:opacity-50"
-            >
-              Сохранить
-            </button>
-          )}
-        </div>
-        {state.hasKey && (
-          <div className="mt-2 flex items-center justify-between">
-            <p className="text-xs text-success">Ключ сохранён (зашифрован).</p>
-            <button
-              onClick={() => void save({ clearKey: true })}
-              disabled={saving}
-              className="inline-flex items-center gap-1 rounded-lg bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
-            >
-              <Trash2 className="size-3.5" />
-              Удалить
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Test */}
-      <div className="mt-5 flex items-center gap-2">
-        <button
-          onClick={() => void testConnection()}
-          disabled={testing || (!state.hasKey && !newKey)}
-          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-accent/15 py-3 text-sm font-semibold text-accent disabled:opacity-40"
-        >
-          {testing ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <RefreshCw className="size-4" />
-          )}
-          Проверить
-        </button>
-      </div>
-      {testResult && (
-        <div
-          className={`mt-2 rounded-xl px-4 py-3 text-sm ${
-            testResult.ok ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-400"
-          }`}
-        >
-          {testResult.ok
-            ? `✅ OK · ${testResult.model ?? ""} · ${testResult.latencyMs ?? "?"} мс`
-            : `❌ ${testResult.error ?? "Ошибка"}`}
-        </div>
-      )}
-
-      {/* Mode */}
-      <div className="mt-6">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
-          Режим AI
-        </h2>
-        <div className="mt-2 grid grid-cols-3 gap-2">
-          {(Object.keys(MODE_LABELS) as AiMode[]).map((m) => (
-            <button
-              key={m}
-              onClick={() => void saveMode(m)}
-              disabled={!state.hasKey && m !== "off"}
-              className={`rounded-xl px-3 py-3 text-sm font-medium transition-colors disabled:opacity-40 ${
-                state.mode === m
-                  ? "bg-accent text-accent-text"
-                  : "bg-surface text-muted hover:text-text"
-              }`}
-            >
-              {MODE_LABELS[m]}
-            </button>
-          ))}
-        </div>
-        {!state.hasKey && (
-          <p className="mt-2 text-xs text-muted">
-            Для режимов «Предлагать»/«Авто» нужен API-ключ.
-          </p>
-        )}
-      </div>
-
-      {saveMsg && (
-        <p className="mt-4 text-center text-xs text-muted">{saveMsg}</p>
-      )}
     </div>
   );
 }
