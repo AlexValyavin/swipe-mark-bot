@@ -13,12 +13,16 @@ export function SwipeDeck({
   onOpen,
   onRetry,
   done,
+  showHint,
+  swipeCount,
 }: {
   bookmarks: Bookmark[];
   onSwipe: (direction: SwipeDirection, bookmark: Bookmark) => void;
   onOpen: (bookmark: Bookmark) => void;
   onRetry?: (bookmark: Bookmark) => void;
   done?: number;
+  showHint?: boolean;
+  swipeCount?: number;
 }) {
   const [exitX, setExitX] = useState(500);
   const [exitY, setExitY] = useState(0);
@@ -29,6 +33,7 @@ export function SwipeDeck({
   const current = bookmarks[0];
   const total = (done ?? 0) + bookmarks.length;
   const pct = total > 0 ? Math.min(100, Math.round(((done ?? 0) / total) * 100)) : 0;
+  const showLabels = (swipeCount ?? 0) < 3;
 
   const handleSwipe = (direction: SwipeDirection) => {
     setExitX(direction === "left" ? -500 : direction === "up" ? 0 : 500);
@@ -71,6 +76,35 @@ export function SwipeDeck({
             />
           </motion.div>
         </AnimatePresence>
+
+        {showHint && (
+          <div className="pointer-events-none absolute inset-0 z-20" style={{ zIndex: 25 }}>
+            <motion.div
+              initial={{ opacity: 0, x: -12 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3, type: "spring", stiffness: 220, damping: 22 }}
+              className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-danger/90 px-3 py-1.5 text-xs font-semibold text-white shadow-lg"
+            >
+              ← Архив
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, x: 12 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3, type: "spring", stiffness: 220, damping: 22 }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-success/90 px-3 py-1.5 text-xs font-semibold text-white shadow-lg"
+            >
+              Потом →
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5, type: "spring", stiffness: 220, damping: 22 }}
+              className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-indigo-500/90 px-3 py-1.5 text-xs font-semibold text-white shadow-lg"
+            >
+              ↑ Открыть
+            </motion.div>
+          </div>
+        )}
       </div>
 
       {/* Прогресс разбора */}
@@ -78,16 +112,22 @@ export function SwipeDeck({
         <div className="w-full max-w-[300px] rounded-xl bg-black/50 px-3 py-2 backdrop-blur-sm">
           <div className="flex items-baseline justify-between gap-2">
             <span className="text-[10px] uppercase tracking-wide text-white/70">
-              {done !== undefined ? `${done} / ${total} разобрано` : "осталось"}
+              {done !== undefined
+                ? `разобрано ${done} из ${total}`
+                : "осталось"}
             </span>
             <span className="text-sm font-bold text-white tabular-nums">
-              {bookmarks.length}
+              {done !== undefined
+                ? bookmarks.length === 1
+                  ? "Последняя!"
+                  : `${bookmarks.length} осталось`
+                : bookmarks.length}
             </span>
           </div>
           {done !== undefined && (
             <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/20">
               <motion.div
-                className="h-full rounded-full bg-emerald-400"
+                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500"
                 animate={{ width: `${pct}%` }}
                 transition={{ type: "spring", stiffness: 200, damping: 30 }}
               />
@@ -98,39 +138,54 @@ export function SwipeDeck({
 
       {/* Action buttons - Tinder style */}
       <div className="flex items-center justify-center gap-6 py-4" style={{ zIndex: 20 }}>
-        <button
-          onClick={() => {
-            telegram?.haptic.impact("medium");
-            handleSwipe("left");
-          }}
-          aria-label="В архив"
-          title="В архив"
-          className="flex size-14 items-center justify-center rounded-full border-2 border-danger/40 bg-surface text-danger transition-transform active:scale-90"
-        >
-          <X className="size-6" />
-        </button>
-        <button
-          onClick={() => {
-            telegram?.haptic.impact("heavy");
-            onOpen(current);
-          }}
-          aria-label="Открыть"
-          title="Открыть"
-          className="flex size-16 items-center justify-center rounded-full bg-accent text-accent-text shadow-lg shadow-accent/30 transition-transform active:scale-90"
-        >
-          <ExternalLink className="size-7" />
-        </button>
-        <button
-          onClick={() => {
-            telegram?.haptic.impact("light");
-            handleSwipe("right");
-          }}
-          aria-label="Позже"
-          title="Позже"
-          className="flex size-14 items-center justify-center rounded-full border-2 border-success/40 bg-surface text-success transition-transform active:scale-90"
-        >
-          <Clock className="size-6" />
-        </button>
+        <div className="flex flex-col items-center gap-1.5">
+          <button
+            onClick={() => {
+              telegram?.haptic.impact("medium");
+              handleSwipe("left");
+            }}
+            aria-label="В архив"
+            title="В архив"
+            className="flex size-14 items-center justify-center rounded-full border-2 border-danger/40 bg-surface text-danger transition-transform active:scale-90"
+          >
+            <X className="size-6" />
+          </button>
+          {showLabels && (
+            <span className="text-[11px] font-medium text-muted">Архив</span>
+          )}
+        </div>
+        <div className="flex flex-col items-center gap-1.5">
+          <button
+            onClick={() => {
+              telegram?.haptic.impact("heavy");
+              onOpen(current);
+            }}
+            aria-label="Открыть"
+            title="Открыть"
+            className="flex size-16 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-purple-500/40 transition-transform active:scale-90"
+          >
+            <ExternalLink className="size-7" />
+          </button>
+          {showLabels && (
+            <span className="text-[11px] font-medium text-muted">Открыть</span>
+          )}
+        </div>
+        <div className="flex flex-col items-center gap-1.5">
+          <button
+            onClick={() => {
+              telegram?.haptic.impact("light");
+              handleSwipe("right");
+            }}
+            aria-label="Позже"
+            title="Позже"
+            className="flex size-14 items-center justify-center rounded-full border-2 border-success/40 bg-surface text-success transition-transform active:scale-90"
+          >
+            <Clock className="size-6" />
+          </button>
+          {showLabels && (
+            <span className="text-[11px] font-medium text-muted">Потом</span>
+          )}
+        </div>
       </div>
     </div>
   );

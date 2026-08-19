@@ -434,9 +434,8 @@ export function Library({
   };
 
   const tabs: { key: LibraryTab; label: string }[] = [
-    { key: "deck", label: "В колоде" },
-    { key: "later", label: "Позже" },
-    { key: "archive", label: "Архив" },
+    { key: "deck", label: "Разобрать" },
+    { key: "later", label: "Потом" },
   ];
 
   const activeFolders = useMemo(
@@ -451,7 +450,7 @@ export function Library({
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Header: title + search + filters */}
       <div className="flex items-center gap-2 px-5 py-2">
-        <h1 className="shrink-0 text-lg font-bold text-text">Сохранёнки</h1>
+        <h1 className="shrink-0 text-lg font-bold text-text">Мои сохранёнки</h1>
         <div className="flex flex-1 items-center gap-2 rounded-xl bg-surface px-3 py-2">
           <Search className="size-4 text-muted" />
           <input
@@ -622,6 +621,8 @@ export function Library({
               setSelectedTags([]);
               setQ("");
             }}
+            tab={tab}
+            onTabChange={(t) => setTab(t)}
             onClose={() => setFiltersOpen(false)}
           />
         )}
@@ -1378,12 +1379,16 @@ function FiltersSheet({
   selectedTags,
   onToggleTag,
   onClear,
+  tab,
+  onTabChange,
   onClose,
 }: {
   tags: { id: string; name: string; count: number }[];
   selectedTags: string[];
   onToggleTag: (name: string) => void;
   onClear: () => void;
+  tab: LibraryTab;
+  onTabChange: (tab: LibraryTab) => void;
   onClose: () => void;
 }) {
   const telegram = useTelegram();
@@ -1418,6 +1423,31 @@ function FiltersSheet({
           )}
         </div>
         <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted">
+          Показать
+        </h3>
+        <div className="mt-2 flex items-center rounded-xl bg-bg p-1">
+          {(
+            [
+              { key: "deck", label: "Разобрать" },
+              { key: "later", label: "Потом" },
+              { key: "archive", label: "Архив" },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.key}
+              onClick={() => {
+                telegram?.haptic.selection();
+                onTabChange(t.key);
+              }}
+              className={`flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-2 text-xs font-medium transition-colors ${
+                tab === t.key ? "bg-accent text-accent-text" : "text-muted hover:text-text"
+              }`}
+            >
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </div>
+        <h3 className="mt-5 text-xs font-semibold uppercase tracking-wider text-muted">
           Теги
         </h3>
         {tags.length === 0 ? (

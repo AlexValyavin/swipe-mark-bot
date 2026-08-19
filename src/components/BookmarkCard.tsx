@@ -291,6 +291,28 @@ export function BookmarkCard({
             AI: {bookmark.aiFolderName}
           </div>
         )}
+        {(bookmark.tags && bookmark.tags.length > 0) ||
+        (bookmark.folders && bookmark.folders.length > 0) ? (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {bookmark.folders?.map((f) => (
+              <span
+                key={f.id}
+                className="inline-flex items-center gap-1 rounded-lg bg-surface px-2 py-1 text-xs font-medium text-muted"
+              >
+                <span>{f.emoji || "📁"}</span>
+                {f.name}
+              </span>
+            ))}
+            {bookmark.tags?.map((t) => (
+              <span
+                key={t.id}
+                className="inline-flex items-center gap-1 rounded-lg bg-surface px-2 py-1 text-xs font-medium text-muted"
+              >
+                # {t.name}
+              </span>
+            ))}
+          </div>
+        ) : null}
         {!bookmark.aiSummary && !summaryDone && aiAvailable && (
           <div className="mt-2">
             {summaryLoading ? (

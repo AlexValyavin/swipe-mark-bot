@@ -40,6 +40,14 @@ function thumbFor(c: Bookmark): string | null {
   return c.imageUrl || c.mediaItems?.[0]?.imageUrl || null;
 }
 
+function pluralize(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
 export default function Home() {
   const telegram = useTelegram();
   const twa = telegram?.app ?? null;
@@ -81,6 +89,11 @@ export default function Home() {
   const [sessionDone, setSessionDone] = useState(0);
   const [sessionArchived, setSessionArchived] = useState(0);
   const [sessionLater, setSessionLater] = useState(0);
+  const [sessionOpened, setSessionOpened] = useState(0);
+  const [swipeCount, setSwipeCount] = useState(() => {
+    if (typeof window === "undefined") return 0;
+    return Number(localStorage.getItem("swipe-count") || 0);
+  });
 
   const isMiniApp = !!twa;
   const user = twa?.initDataUnsafe?.user;
@@ -170,6 +183,7 @@ export default function Home() {
     if (target) {
       window.open(target, "_blank", "noopener,noreferrer");
     }
+    setSessionOpened((n) => n + 1);
     postAction(bookmark.id, "open");
   };
 
@@ -343,6 +357,7 @@ export default function Home() {
     try {
       const n = Number(localStorage.getItem("swipe-count") || 0) + 1;
       localStorage.setItem("swipe-count", String(n));
+      setSwipeCount(n);
       if (n >= 10) dismissHint();
     } catch {
       // localStorage может быть недоступен — игнорируем
@@ -354,6 +369,7 @@ export default function Home() {
     setSessionDone(0);
     setSessionArchived(0);
     setSessionLater(0);
+    setSessionOpened(0);
     loadCounts();
     loadBookmarks()
       .catch((e) => setError(e instanceof Error ? e.message : "Ошибка загрузки"))
@@ -474,14 +490,6 @@ export default function Home() {
             }}
           />
           <button
-            onClick={refresh}
-            aria-label="Обновить"
-            title="Обновить"
-            className="flex size-9 items-center justify-center rounded-full bg-surface text-muted transition-colors hover:text-text active:scale-90"
-          >
-            <RefreshCw className="size-4" />
-          </button>
-          <button
             onClick={() => {
               telegram?.haptic.selection();
               setSettingsOpen(true);
@@ -524,26 +532,6 @@ export default function Home() {
                 </div>
               )}
 
-              {showHint && (
-                <motion.div
-                  initial={{ opacity: 0, y: -8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mx-5 mb-2 flex items-center gap-2 rounded-xl bg-surface px-4 py-2.5"
-                >
-                  <span className="text-lg">👆</span>
-                  <p className="flex-1 text-xs text-muted">
-                    Влево — в архив · Вправо — позже · Вверх — открыть
-                  </p>
-                  <button
-                    onClick={dismissHint}
-                    aria-label="Скрыть подсказку"
-                    className="flex size-6 items-center justify-center rounded-full text-muted active:scale-90"
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                </motion.div>
-              )}
-
               {folderDeck ? (
                 folderDeckLoading ? (
                   <div className="flex flex-1 items-center justify-center">
@@ -569,7 +557,7 @@ export default function Home() {
                 )
               ) : deck.length > 0 ? (
                 <div className="flex flex-1 min-h-0 items-center justify-center px-4 pb-2 md:max-h-[min(820px,calc(100dvh-140px))]">
-                  <SwipeDeck bookmarks={deck} onSwipe={handleSwipe} onOpen={openBookmark} onRetry={retryBookmark} done={sessionDone} />
+                  <SwipeDeck bookmarks={deck} onSwipe={handleSwipe} onOpen={openBookmark} onRetry={retryBookmark} done={sessionDone} showHint={showHint} swipeCount={swipeCount} />
                 </div>
               ) : bookmarks.length > 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center gap-5 p-8 text-center">
@@ -583,15 +571,24 @@ export default function Home() {
                   </motion.div>
                   <div>
                     <p className="text-xl font-bold text-text">
-                      Готово! Ты разобрал {sessionDone} сохранений.
+                      Ты разобрал {sessionDone}{" "}
+                      {pluralize(sessionDone, "сохранение", "сохранения", "сохранений")}.
                     </p>
-                    <p className="mt-1 text-sm text-muted">Колода пуста — молодец.</p>
+                    <p className="mt-1 text-sm text-muted">Колода чистая — молодец.</p>
                   </div>
-                  {(sessionArchived > 0 || sessionLater > 0) && (
+                  {(sessionArchived > 0 || sessionLater > 0 || sessionOpened > 0) && (
                     <div className="flex w-full max-w-[280px] flex-col gap-2">
+                      {sessionOpened > 0 && (
+                        <div className="flex items-center justify-between rounded-xl bg-surface px-4 py-2.5">
+                          <span className="text-sm text-muted">✨ Оставил</span>
+                          <span className="font-bold tabular-nums text-accent">
+                            {sessionOpened}
+                          </span>
+                        </div>
+                      )}
                       {sessionLater > 0 && (
                         <div className="flex items-center justify-between rounded-xl bg-surface px-4 py-2.5">
-                          <span className="text-sm text-muted">Позже</span>
+                          <span className="text-sm text-muted">🕐 Позже</span>
                           <span className="font-bold tabular-nums text-success">
                             {sessionLater}
                           </span>
@@ -599,7 +596,7 @@ export default function Home() {
                       )}
                       {sessionArchived > 0 && (
                         <div className="flex items-center justify-between rounded-xl bg-surface px-4 py-2.5">
-                          <span className="text-sm text-muted">В архив</span>
+                          <span className="text-sm text-muted">🗄 В архив</span>
                           <span className="font-bold tabular-nums text-danger">
                             {sessionArchived}
                           </span>
@@ -613,9 +610,9 @@ export default function Home() {
                         telegram?.haptic.selection();
                         setTab("library");
                       }}
-                      className="inline-flex items-center justify-center gap-2 rounded-full bg-accent px-8 py-2.5 text-sm font-semibold text-accent-text shadow-lg shadow-accent/30 transition-transform active:scale-95"
+                      className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 px-8 py-2.5 text-sm font-semibold text-white shadow-lg shadow-purple-500/30 transition-transform active:scale-95"
                     >
-                      Посмотреть сохранёнки
+                      Посмотреть, что я оставил →
                     </button>
                     <button
                       onClick={refresh}
@@ -633,8 +630,16 @@ export default function Home() {
                   </div>
                   <h2 className="text-xl font-semibold text-text">Нет сохранений</h2>
                   <p className="max-w-xs text-sm text-muted">
-                    Отправь ссылку, фото или видео боту @SwipeMarkBot — они появятся здесь.
+                    Отправь что-нибудь боту — и здесь появится первая карточка.
                   </p>
+                  <a
+                    href="https://t.me/SwipeMarkBot"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-purple-500/30 transition-transform active:scale-95"
+                  >
+                    Открыть @SwipeMarkBot
+                  </a>
                 </div>
               )}
             </motion.div>
@@ -833,7 +838,7 @@ export default function Home() {
 
       {/* Undo toast */}
       <AnimatePresence>
-        {lastSwipe && (
+        {lastSwipe && deck.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 24, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -1027,10 +1032,10 @@ export default function Home() {
                 ⚡
               </motion.div>
               <h1 className="mt-5 text-2xl font-bold tracking-tight text-text">
-                Добро пожаловать в SwipeMark
+                Разгреби свои сохранёнки
               </h1>
               <p className="mt-2 text-sm text-muted">
-                Здесь соберутся ссылки, видео и сообщения, которые ты сохранял боту — и ты разберёшь их за пару минут.
+                Всё, что ты отправляешь боту, собирается здесь. Свайпай → решай → освобождай голову.
               </p>
             </div>
 
@@ -1040,20 +1045,20 @@ export default function Home() {
                   📩
                 </span>
                 <div className="text-left">
-                  <p className="text-sm font-semibold text-text">Отправляй боту</p>
+                  <p className="text-sm font-semibold text-text">Сохраняй</p>
                   <p className="text-xs text-muted">
-                    Ссылки, видео и сообщения — всё попадёт в колоду.
+                    Отправляй боту ссылки, видео и сообщения.
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-3 rounded-xl bg-surface p-3.5">
                 <span className="flex size-9 flex-shrink-0 items-center justify-center rounded-xl bg-success/15 text-lg">
-                  👉
+                  👆
                 </span>
                 <div className="text-left">
-                  <p className="text-sm font-semibold text-text">Разбирай свайпами</p>
+                  <p className="text-sm font-semibold text-text">Разбирай</p>
                   <p className="text-xs text-muted">
-                    ← архив · → потом · ↑ открыть.
+                    Свайпай влево, вправо или открывай.
                   </p>
                 </div>
               </div>
@@ -1064,7 +1069,7 @@ export default function Home() {
                 <div className="text-left">
                   <p className="text-sm font-semibold text-text">AI поможет</p>
                   <p className="text-xs text-muted">
-                    Сам определит тему и разложит по папкам.
+                    Найдёт тему, кратко перескажет и предложит папку.
                   </p>
                 </div>
               </div>
@@ -1074,7 +1079,7 @@ export default function Home() {
               onClick={finishOnboarding}
               className="mt-6 w-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 py-3.5 text-base font-semibold text-white shadow-lg shadow-purple-500/30 transition-transform active:scale-[0.98]"
             >
-              Начать
+              Начать разбор
             </button>
           </motion.div>
         </motion.div>
