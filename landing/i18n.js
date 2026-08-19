@@ -90,7 +90,7 @@
     try {
       var stored = localStorage.getItem(STORAGE_KEY);
       if (stored === "ru" || stored === "en") return stored;
-    } catch (e) {}
+    } catch {}
     return document.documentElement.lang === "en" ? "en" : "ru";
   }
 
@@ -118,7 +118,7 @@
 
     try {
       localStorage.setItem(STORAGE_KEY, lang);
-    } catch (e) {}
+    } catch {}
   }
 
   function toggle() {
@@ -126,8 +126,8 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    var toggle = document.getElementById("lang-toggle");
-    if (toggle) toggle.addEventListener("click", toggle);
+    var btn = document.getElementById("lang-toggle");
+    if (btn) btn.addEventListener("click", toggle);
     apply(currentLang());
   });
 })();
