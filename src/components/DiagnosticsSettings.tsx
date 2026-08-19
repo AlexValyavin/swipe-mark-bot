@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Loader2, RefreshCw, Wrench } from "lucide-react";
 import { useTelegram } from "@/components/TelegramProvider";
+import { useI18n } from "@/components/I18nProvider";
 
 type FailedCard = {
   id: string;
@@ -13,6 +14,7 @@ type FailedCard = {
 
 export function DiagnosticsSettings() {
   const telegram = useTelegram();
+  const { t, lang } = useI18n();
   const [available, setAvailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState<FailedCard[]>([]);
@@ -49,13 +51,13 @@ export function DiagnosticsSettings() {
       const res = await fetch(`/api/cards/${id}/refetch`, { method: "POST" });
       const data = await res.json();
       if (!res.ok || data.error) {
-        setMsg(data.error || "Ошибка");
+        setMsg(data.error || t("common.error.generic"));
         return;
       }
       setFailed((prev) => prev.filter((c) => c.id !== id));
       telegram?.haptic.notification("success");
     } catch {
-      setMsg("Ошибка сети");
+      setMsg(t("common.error.network"));
     } finally {
       setBusyId(null);
     }
@@ -75,17 +77,15 @@ export function DiagnosticsSettings() {
     <div className="mt-6 rounded-2xl border border-line bg-surface p-4">
       <div className="flex items-center gap-2">
         <Wrench className="size-4 text-accent" />
-        <h2 className="text-sm font-bold text-text">Диагностика</h2>
+        <h2 className="text-sm font-bold text-text">{t("diag.title")}</h2>
       </div>
 
-      <p className="mt-2 text-xs text-muted">
-        Карточки, у которых не получилось извлечь метаданные или сохранить медиа.
-      </p>
+      <p className="mt-2 text-xs text-muted">{t("diag.desc")}</p>
 
       {failed.length === 0 ? (
         <div className="mt-3 flex items-center gap-2 rounded-xl bg-success/10 px-3 py-2.5 text-xs text-success">
           <AlertTriangle className="size-4" />
-          Сбоев нет. Все карточки обработаны.
+          {t("diag.empty")}
         </div>
       ) : (
         <ul className="mt-3 flex flex-col gap-2">
@@ -96,12 +96,12 @@ export function DiagnosticsSettings() {
             >
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-medium text-text">
-                  {c.url ?? "(без ссылки)"}
+                  {c.url ?? t("diag.noLink")}
                 </p>
                 <p className="mt-0.5 text-[11px] text-red-400">
                   {c.error ?? "unknown"}
                   {c.createdAt
-                    ? ` · ${new Date(c.createdAt).toLocaleString("ru-RU")}`
+                    ? ` · ${new Date(c.createdAt).toLocaleString(lang)}`
                     : ""}
                 </p>
               </div>
@@ -115,7 +115,7 @@ export function DiagnosticsSettings() {
                 ) : (
                   <RefreshCw className="size-3.5" />
                 )}
-                Повторить
+                {t("common.retry")}
               </button>
             </li>
           ))}

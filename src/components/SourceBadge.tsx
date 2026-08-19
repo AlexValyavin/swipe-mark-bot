@@ -2,6 +2,7 @@
 
 import { ExternalLink, RefreshCw } from "lucide-react";
 import type { Bookmark } from "@/app/api/bookmarks/route";
+import { useI18n } from "@/components/I18nProvider";
 
 export type SourceKind = "youtube" | "instagram" | "tiktok" | "telegram" | "link";
 
@@ -44,19 +45,20 @@ export function SourceBadge({ bookmark }: { bookmark: Bookmark }) {
 
 /** Точка-статус meta_status (processing = пульс, failed = красная, done = зелёная). */
 export function MetaStatusDot({ bookmark }: { bookmark: Bookmark }) {
+  const { t } = useI18n();
   const status = bookmark.metaStatus;
   if (!status || status === "done" || status === "pending") return null;
   if (status === "processing") {
     return (
       <span
         className="absolute top-3 left-3 flex size-2.5 animate-pulse rounded-full bg-amber-400"
-        title="Извлекаем метаданные…"
+        title={t("source.extracting")}
       />
     );
   }
   if (status === "failed") {
     return (
-      <span className="absolute top-3 left-3 flex size-2.5 rounded-full bg-rose-500" title="Не удалось получить метаданные" />
+      <span className="absolute top-3 left-3 flex size-2.5 rounded-full bg-rose-500" title={t("source.failed")} />
     );
   }
   return null;
@@ -70,6 +72,7 @@ export function FailedActions({
   bookmark: Bookmark;
   onRetry?: () => void;
 }) {
+  const { t } = useI18n();
   const url = bookmark.forwardUrl ?? bookmark.url;
   return (
     <div className="flex items-center gap-2 pt-3">
@@ -82,7 +85,7 @@ export function FailedActions({
           className="flex items-center gap-1.5 rounded-lg bg-line px-3 py-1.5 text-xs font-medium text-text active:scale-95 transition-transform"
         >
           <RefreshCw className="size-3.5" />
-          Повторить
+          {t("common.retry")}
         </button>
       )}
       {url && (
@@ -94,7 +97,7 @@ export function FailedActions({
           className="flex items-center gap-1.5 rounded-lg bg-line px-3 py-1.5 text-xs font-medium text-muted active:scale-95 transition-transform"
         >
           <ExternalLink className="size-3.5" />
-          Открыть
+          {t("common.open")}
         </button>
       )}
     </div>

@@ -15,6 +15,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { useTelegram } from "@/components/TelegramProvider";
+import { useI18n, syncLang } from "@/components/I18nProvider";
 import { SwipeDeck } from "@/components/SwipeDeck";
 import type { SwipeDirection } from "@/components/BookmarkCard";
 import { getOpenTarget } from "@/lib/openTarget";
@@ -40,16 +41,9 @@ function thumbFor(c: Bookmark): string | null {
   return c.imageUrl || c.mediaItems?.[0]?.imageUrl || null;
 }
 
-function pluralize(n: number, one: string, few: string, many: string): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return one;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
-  return many;
-}
-
 export default function Home() {
   const telegram = useTelegram();
+  const { t, tp, lang, setLang } = useI18n();
   const twa = telegram?.app ?? null;
   const [userId, setUserId] = useState<string | null>(null);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
@@ -82,7 +76,7 @@ export default function Home() {
     return localStorage.getItem("swipe-hint-seen") === "1";
   });
   const [lastSwipe, setLastSwipe] = useState<Bookmark | null>(null);
-  const [undoLabel, setUndoLabel] = useState("В архив");
+  const [undoLabel, setUndoLabel] = useState(t("undo.action.archive"));
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [navHidden, setNavHidden] = useState(false);
   const swipedOnce = useRef(false);
@@ -110,6 +104,9 @@ export default function Home() {
       }
       if (data.uiScale === "s" || data.uiScale === "l") {
         document.documentElement.setAttribute("data-ui-scale", data.uiScale);
+      }
+      if (data.lang === "ru" || data.lang === "en") {
+        setLang(data.lang);
       }
       if (data.onboarded !== undefined) {
         setOnboarded(data.onboarded === true);
@@ -212,13 +209,13 @@ export default function Home() {
       setLater((prev) => [bookmark, ...prev.filter((b) => b.id !== bookmark.id)]);
       setSessionDone((n) => n + 1);
       setSessionLater((n) => n + 1);
-      showUndoToast(bookmark, "Отложено");
+      showUndoToast(bookmark, t("undo.action.later"));
       const res = await postAction(bookmark.id, "right");
       if (!res) loadBookmarks();
     }
   };
 
-  const showUndoToast = (bookmark: Bookmark, label = "В архив") => {
+  const showUndoToast = (bookmark: Bookmark, label = t("undo.action.archive")) => {
     setLastSwipe(bookmark);
     setUndoLabel(label);
     if (undoTimer.current) clearTimeout(undoTimer.current);
@@ -372,7 +369,7 @@ export default function Home() {
     setSessionOpened(0);
     loadCounts();
     loadBookmarks()
-      .catch((e) => setError(e instanceof Error ? e.message : "Ошибка загрузки"))
+      .catch((e) => setError(e instanceof Error ? e.message : t("app.error.load")))
       .finally(() => setLoading(false));
   };
 
@@ -399,11 +396,11 @@ export default function Home() {
           body: JSON.stringify({ initData }),
         });
         if (!authRes.ok) {
-          throw new Error("Авторизация не прошла");
+          throw new Error(t("app.error.auth"));
         }
         await Promise.all([loadSettings(), loadBookmarks(), loadCounts()]);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Ошибка загрузки");
+        setError(e instanceof Error ? e.message : t("app.error.load"));
       } finally {
         setLoading(false);
       }
@@ -420,15 +417,13 @@ export default function Home() {
           <h1 className="text-3xl font-bold tracking-tight">
             Swipe<span className="text-accent">Mark</span>
           </h1>
-          <p className="mt-2 text-sm text-muted">
-            Сохраняй ссылки и разбирай бэклог свайпами
-          </p>
+          <p className="mt-2 text-sm text-muted">{t("app.subtitle")}</p>
         </div>
         <a
           href="https://t.me/SwipeMarkBot/app"
           className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 px-8 py-3 font-semibold text-white shadow-lg active:scale-95 transition-transform"
         >
-          <span>Открыть в Telegram</span>
+          <span>{t("app.openInTelegram")}</span>
           <span>→</span>
         </a>
       </div>
@@ -440,7 +435,7 @@ export default function Home() {
       <div className="flex min-h-dvh items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="size-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-          <p className="text-sm text-muted">Загрузка...</p>
+          <p className="text-sm text-muted">{t("app.loading")}</p>
         </div>
       </div>
     );
@@ -450,12 +445,12 @@ export default function Home() {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-4 p-8 text-center">
         <div className="text-5xl">⚠️</div>
-        <p className="text-sm text-red-400">Ошибка: {error}</p>
+        <p className="text-sm text-red-400">{t("app.error", { error })}</p>
         <button
           onClick={() => window.location.reload()}
           className="rounded-full bg-surface px-6 py-2 text-sm"
         >
-          Попробовать снова
+          {t("app.retry")}
         </button>
       </div>
     );
@@ -465,7 +460,7 @@ export default function Home() {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-4 p-8 text-center">
         <div className="text-5xl">🔐</div>
-        <p className="text-sm text-muted">Не удалось получить данные авторизации.</p>
+        <p className="text-sm text-muted">{t("app.error.authData")}</p>
       </div>
     );
   }
@@ -494,8 +489,8 @@ export default function Home() {
               telegram?.haptic.selection();
               setSettingsOpen(true);
             }}
-            aria-label="Настройки"
-            title="Настройки"
+            aria-label={t("header.settings")}
+            title={t("header.settings")}
             className="flex size-9 items-center justify-center rounded-full bg-surface text-muted transition-colors hover:text-text active:scale-90"
           >
             <MoreHorizontal className="size-5" />
@@ -520,13 +515,13 @@ export default function Home() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={closeFolderDeck}
-                      aria-label="Закрыть"
+                      aria-label={t("common.close")}
                       className="flex size-8 items-center justify-center rounded-full bg-surface text-muted active:scale-90"
                     >
                       <X className="size-4" />
                     </button>
                     <span className="text-sm font-medium text-text">
-                      Папка: {folderDeck.folderName} · {folderDeckCards.length}
+                      {t("header.folder", { name: folderDeck.folderName, count: folderDeckCards.length })}
                     </span>
                   </div>
                 </div>
@@ -552,7 +547,7 @@ export default function Home() {
                 ) : (
                   <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
                     <div className="text-5xl">📂</div>
-                    <p className="text-sm text-muted">В папке пока нет карточек</p>
+                    <p className="text-sm text-muted">{t("header.folderEmpty")}</p>
                   </div>
                 )
               ) : deck.length > 0 ? (
@@ -571,16 +566,15 @@ export default function Home() {
                   </motion.div>
                   <div>
                     <p className="text-xl font-bold text-text">
-                      Ты разобрал {sessionDone}{" "}
-                      {pluralize(sessionDone, "сохранение", "сохранения", "сохранений")}.
+                      {t("completion.title", { count: sessionDone, word: tp("words.save", sessionDone) })}
                     </p>
-                    <p className="mt-1 text-sm text-muted">Колода чистая — молодец.</p>
+                    <p className="mt-1 text-sm text-muted">{t("completion.deckClean")}</p>
                   </div>
                   {(sessionArchived > 0 || sessionLater > 0 || sessionOpened > 0) && (
                     <div className="flex w-full max-w-[280px] flex-col gap-2">
                       {sessionOpened > 0 && (
                         <div className="flex items-center justify-between rounded-xl bg-surface px-4 py-2.5">
-                          <span className="text-sm text-muted">✨ Оставил</span>
+                          <span className="text-sm text-muted">{t("completion.kept")}</span>
                           <span className="font-bold tabular-nums text-accent">
                             {sessionOpened}
                           </span>
@@ -588,7 +582,7 @@ export default function Home() {
                       )}
                       {sessionLater > 0 && (
                         <div className="flex items-center justify-between rounded-xl bg-surface px-4 py-2.5">
-                          <span className="text-sm text-muted">🕐 Позже</span>
+                          <span className="text-sm text-muted">{t("completion.later")}</span>
                           <span className="font-bold tabular-nums text-success">
                             {sessionLater}
                           </span>
@@ -596,7 +590,7 @@ export default function Home() {
                       )}
                       {sessionArchived > 0 && (
                         <div className="flex items-center justify-between rounded-xl bg-surface px-4 py-2.5">
-                          <span className="text-sm text-muted">🗄 В архив</span>
+                          <span className="text-sm text-muted">{t("completion.archived")}</span>
                           <span className="font-bold tabular-nums text-danger">
                             {sessionArchived}
                           </span>
@@ -612,14 +606,14 @@ export default function Home() {
                       }}
                       className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 px-8 py-2.5 text-sm font-semibold text-white shadow-lg shadow-purple-500/30 transition-transform active:scale-95"
                     >
-                      Посмотреть, что я оставил →
+                      {t("completion.seeKept")}
                     </button>
                     <button
                       onClick={refresh}
                       className="inline-flex items-center justify-center gap-2 rounded-full bg-surface px-8 py-2.5 text-sm text-text hover:bg-line transition-colors"
                     >
                       <RefreshCw className="size-3.5" />
-                      Проверить новые
+                      {t("completion.checkNew")}
                     </button>
                   </div>
                 </div>
@@ -628,17 +622,15 @@ export default function Home() {
                   <div className="flex size-20 items-center justify-center rounded-2xl bg-surface text-4xl">
                     📭
                   </div>
-                  <h2 className="text-xl font-semibold text-text">Нет сохранений</h2>
-                  <p className="max-w-xs text-sm text-muted">
-                    Отправь что-нибудь боту — и здесь появится первая карточка.
-                  </p>
+                  <h2 className="text-xl font-semibold text-text">{t("empty.title")}</h2>
+                  <p className="max-w-xs text-sm text-muted">{t("empty.text")}</p>
                   <a
                     href="https://t.me/SwipeMarkBot"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-purple-500/30 transition-transform active:scale-95"
                   >
-                    Открыть @SwipeMarkBot
+                    {t("empty.openBot")}
                   </a>
                 </div>
               )}
@@ -691,7 +683,7 @@ export default function Home() {
                           {c.title}
                         </p>
                         <p className="mt-0.5 text-[11px] text-muted">
-                          {new Date(c.createdAt).toLocaleString("ru", {
+                          {new Date(c.createdAt).toLocaleString(lang, {
                             day: "numeric",
                             month: "short",
                             hour: "2-digit",
@@ -702,16 +694,16 @@ export default function Home() {
                       <div className="flex flex-shrink-0 items-center gap-1">
                         <button
                           onClick={() => archiveFromLater(c)}
-                          aria-label="В архив"
-                          title="В архив"
+                          aria-label={t("deck.btn.archive")}
+                          title={t("deck.btn.archive")}
                           className="flex size-8 items-center justify-center rounded-full bg-surface text-danger transition-colors hover:bg-line active:scale-90"
                         >
                           <Archive className="size-4" />
                         </button>
                         <button
                           onClick={() => returnToDeck(c)}
-                          aria-label="Вернуть в разбор"
-                          title="Вернуть в разбор"
+                          aria-label={t("library.toDeck")}
+                          title={t("library.toDeck")}
                           className="flex size-8 items-center justify-center rounded-full bg-surface text-muted transition-colors hover:bg-line active:scale-90"
                         >
                           <Undo2 className="size-4" />
@@ -721,8 +713,8 @@ export default function Home() {
                             telegram?.haptic.impact("medium");
                             openBookmark(c);
                           }}
-                          aria-label="Открыть"
-                          title="Открыть"
+                          aria-label={t("common.open")}
+                          title={t("common.open")}
                           className="flex size-8 items-center justify-center rounded-full bg-accent/15 text-accent transition-colors hover:bg-accent/25 active:scale-90"
                         >
                           <ExternalLink className="size-4" />
@@ -741,10 +733,8 @@ export default function Home() {
                   >
                     ⏰
                   </motion.div>
-                  <p className="text-text">Здесь ничего нет</p>
-                  <p className="text-sm text-muted">
-                    Свайпни вправо, чтобы отложить карточку на потом
-                  </p>
+                  <p className="text-text">{t("later.emptyTitle")}</p>
+                  <p className="text-sm text-muted">{t("later.emptyText")}</p>
                 </div>
               )}
             </motion.div>
@@ -777,7 +767,7 @@ export default function Home() {
               </span>
             )}
           </div>
-          <span className="text-xs font-medium">Разобрать</span>
+          <span className="text-xs font-medium">{t("nav.sort")}</span>
         </button>
         <button
           onClick={() => {
@@ -797,7 +787,7 @@ export default function Home() {
               </span>
             )}
           </div>
-          <span className="text-xs font-medium">Сохранёнки</span>
+          <span className="text-xs font-medium">{t("nav.library")}</span>
         </button>
         <button
           onClick={() => {
@@ -817,7 +807,7 @@ export default function Home() {
               </span>
             )}
           </div>
-          <span className="text-xs font-medium">Позже</span>
+          <span className="text-xs font-medium">{t("nav.later")}</span>
         </button>
       </motion.nav>
 
@@ -828,7 +818,7 @@ export default function Home() {
             telegram?.haptic.selection();
             setNavHidden(false);
           }}
-          aria-label="Показать меню"
+          aria-label={t("nav.showMenu")}
           className="fixed bottom-1.5 left-1/2 z-30 -translate-x-1/2 rounded-full border border-line bg-surface/80 px-4 py-1 text-muted backdrop-blur-sm transition-colors hover:text-text active:scale-95"
           style={{ touchAction: "none" }}
         >
@@ -851,7 +841,7 @@ export default function Home() {
               onClick={undoLastSwipe}
               className="rounded-full bg-accent px-3 py-1 text-fs-sm font-semibold text-accent-text transition-colors active:scale-95"
             >
-              Отменить
+              {t("undo.undo")}
             </button>
           </motion.div>
         )}
@@ -892,10 +882,8 @@ export default function Home() {
                   <Trash2 className="size-5" />
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-text">Очистить архив?</h2>
-                  <p className="text-xs text-muted">
-                    Будут удалены все карточки архива. Действие необратимо.
-                  </p>
+                  <h2 className="text-base font-bold text-text">{t("clearArchive.title")}</h2>
+                  <p className="text-xs text-muted">{t("clearArchive.text")}</p>
                 </div>
               </div>
               <div className="mt-5 flex gap-2.5">
@@ -903,13 +891,13 @@ export default function Home() {
                   onClick={() => setClearConfirmOpen(false)}
                   className="flex-1 rounded-full bg-surface py-2.5 text-sm font-medium text-muted transition-colors hover:bg-line"
                 >
-                  Отмена
+                  {t("common.cancel")}
                 </button>
                 <button
                   onClick={clearArchive}
                   className="flex-1 rounded-full bg-red-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-500"
                 >
-                  Удалить всё
+                  {t("clearArchive.deleteAll")}
                 </button>
               </div>
 </motion.div>
@@ -936,10 +924,10 @@ export default function Home() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between px-5 pt-4">
-                <h2 className="text-lg font-bold text-text">Настройки</h2>
+                <h2 className="text-lg font-bold text-text">{t("settings.title")}</h2>
                 <button
                   onClick={() => setSettingsOpen(false)}
-                  aria-label="Закрыть"
+                  aria-label={t("common.close")}
                   className="flex size-9 items-center justify-center rounded-full bg-surface text-muted active:scale-90"
                 >
                   <X className="size-5" />
@@ -950,17 +938,41 @@ export default function Home() {
                   <UiScaleSettings />
                   <FullscreenSettings />
                 </div>
+                <div className="flex items-center justify-between gap-3 px-5 pt-4">
+                  <span className="text-sm font-medium text-text">
+                    {t("settings.language")}
+                  </span>
+                  <div className="flex items-center gap-1 rounded-full bg-bg p-1">
+                    {(["ru", "en"] as const).map((code) => (
+                      <button
+                        key={code}
+                        onClick={() => {
+                          telegram?.haptic.selection();
+                          setLang(code);
+                          syncLang(code);
+                        }}
+                        className={`rounded-full px-3 py-1 text-xs font-semibold uppercase transition-colors ${
+                          lang === code
+                            ? "bg-accent text-accent-text"
+                            : "text-muted hover:text-text"
+                        }`}
+                      >
+                        {code}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="flex flex-col gap-2 px-5 py-3">
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
-                    Архив
+                    {t("settings.archive")}
                   </h3>
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-xs text-muted">Очистка:</span>
+                    <span className="text-xs text-muted">{t("settings.ttl")}</span>
                     {[
-                      { label: "24ч", hours: 24 },
-                      { label: "7д", hours: 168 },
-                      { label: "30д", hours: 720 },
-                      { label: "Выкл", hours: null },
+                      { label: t("settings.ttl.24"), hours: 24 },
+                      { label: t("settings.ttl.7d"), hours: 168 },
+                      { label: t("settings.ttl.30d"), hours: 720 },
+                      { label: t("settings.ttl.off"), hours: null },
                     ].map((opt) => (
                       <button
                         key={String(opt.hours)}
@@ -989,11 +1001,11 @@ export default function Home() {
                       }`}
                     >
                       <Trash2 className="size-3" />
-                      Очистить
+                      {t("settings.clear")}
                     </button>
                   </div>
                   <p className="text-[11px] text-muted">
-                    Архивные карточки доступны в «Сохранёнки» → вкладка «Архив».
+                    {t("settings.archiveHint")}
                   </p>
                 </div>
                 <div className="px-5 pb-5 pt-1">
@@ -1032,11 +1044,9 @@ export default function Home() {
                 ⚡
               </motion.div>
               <h1 className="mt-5 text-2xl font-bold tracking-tight text-text">
-                Разгреби свои сохранёнки
+                {t("onboarding.title")}
               </h1>
-              <p className="mt-2 text-sm text-muted">
-                Всё, что ты отправляешь боту, собирается здесь. Свайпай → решай → освобождай голову.
-              </p>
+              <p className="mt-2 text-sm text-muted">{t("onboarding.sub")}</p>
             </div>
 
             <div className="mt-6 flex flex-col gap-2.5">
@@ -1045,10 +1055,8 @@ export default function Home() {
                   📩
                 </span>
                 <div className="text-left">
-                  <p className="text-sm font-semibold text-text">Сохраняй</p>
-                  <p className="text-xs text-muted">
-                    Отправляй боту ссылки, видео и сообщения.
-                  </p>
+                  <p className="text-sm font-semibold text-text">{t("onboarding.saveTitle")}</p>
+                  <p className="text-xs text-muted">{t("onboarding.saveText")}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 rounded-xl bg-surface p-3.5">
@@ -1056,10 +1064,8 @@ export default function Home() {
                   👆
                 </span>
                 <div className="text-left">
-                  <p className="text-sm font-semibold text-text">Разбирай</p>
-                  <p className="text-xs text-muted">
-                    Свайпай влево, вправо или открывай.
-                  </p>
+                  <p className="text-sm font-semibold text-text">{t("onboarding.sortTitle")}</p>
+                  <p className="text-xs text-muted">{t("onboarding.sortText")}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 rounded-xl bg-surface p-3.5">
@@ -1067,10 +1073,8 @@ export default function Home() {
                   ✨
                 </span>
                 <div className="text-left">
-                  <p className="text-sm font-semibold text-text">AI поможет</p>
-                  <p className="text-xs text-muted">
-                    Найдёт тему, кратко перескажет и предложит папку.
-                  </p>
+                  <p className="text-sm font-semibold text-text">{t("onboarding.aiTitle")}</p>
+                  <p className="text-xs text-muted">{t("onboarding.aiText")}</p>
                 </div>
               </div>
             </div>
@@ -1079,7 +1083,7 @@ export default function Home() {
               onClick={finishOnboarding}
               className="mt-6 w-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 py-3.5 text-base font-semibold text-white shadow-lg shadow-purple-500/30 transition-transform active:scale-[0.98]"
             >
-              Начать разбор
+              {t("onboarding.start")}
             </button>
           </motion.div>
         </motion.div>

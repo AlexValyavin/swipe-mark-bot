@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Type } from "lucide-react";
 import { useTelegram } from "@/components/TelegramProvider";
+import { useI18n } from "@/components/I18nProvider";
 
 export type UiScale = "s" | "m" | "l";
 
@@ -18,6 +19,7 @@ function applyScale(scale: UiScale) {
 
 export function UiScaleSettings() {
   const telegram = useTelegram();
+  const { t } = useI18n();
   const [scale, setScale] = useState<UiScale>("m");
 
   useEffect(() => {
@@ -55,14 +57,14 @@ export function UiScaleSettings() {
     <div className="flex items-center justify-between gap-3 rounded-xl bg-surface px-4 py-3">
       <div className="flex items-center gap-2.5">
         <Type className="size-4 text-muted" />
-        <span className="text-sm font-medium text-text">Размер текста</span>
+        <span className="text-sm font-medium text-text">{t("uiscale.label")}</span>
       </div>
       <div className="flex items-center gap-1 rounded-full bg-bg p-1">
         {OPTIONS.map((o) => (
           <button
             key={o.value}
             onClick={() => void change(o.value)}
-            aria-label={`Размер текста ${o.label}`}
+            aria-label={t("uiscale.aria", { label: o.label })}
             className={`min-w-9 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors ${
               scale === o.value
                 ? "bg-accent text-accent-text"

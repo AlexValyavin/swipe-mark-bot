@@ -3,11 +3,13 @@
 import { useEffect } from "react";
 import { Maximize, Minimize } from "lucide-react";
 import { useTelegram } from "@/components/TelegramProvider";
+import { useI18n } from "@/components/I18nProvider";
 
 const FS_KEY = "swipe-fullscreen";
 
 export function FullscreenSettings() {
   const telegram = useTelegram();
+  const { t } = useI18n();
 
   // Авто-восстановление: если пользователь включал полный экран — применяем при старте.
   useEffect(() => {
@@ -41,13 +43,13 @@ export function FullscreenSettings() {
         ) : (
           <Maximize className="size-4 text-muted" />
         )}
-        <span className="text-sm font-medium text-text">Полный экран</span>
+        <span className="text-sm font-medium text-text">{t("fullscreen.label")}</span>
       </div>
       <button
         onClick={toggle}
         role="switch"
         aria-checked={isFullscreen}
-        aria-label="Полный экран"
+        aria-label={t("fullscreen.label")}
         className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
           isFullscreen ? "bg-accent" : "bg-bg"
         }`}

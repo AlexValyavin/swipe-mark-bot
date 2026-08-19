@@ -14,6 +14,7 @@ import {
 } from "@/components/SourceBadge";
 import { fmtDuration, fmtReadMinutes } from "@/lib/format";
 import { getOpenTarget } from "@/lib/openTarget";
+import { useI18n } from "@/components/I18nProvider";
 
 export type SwipeDirection = "left" | "right" | "up";
 
@@ -56,6 +57,7 @@ export function BookmarkCard({
   const [aiAvailable, setAiAvailable] = useState<boolean | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const telegram = useTelegram();
+  const { t, lang } = useI18n();
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotate = useTransform(x, [-200, 200], [-12, 12]);
@@ -116,10 +118,10 @@ export function BookmarkCard({
         }
       } else {
         const data = await res.json().catch(() => ({}));
-        setSummaryError(data.error || "Ошибка");
+        setSummaryError(data.error || t("common.error.generic"));
       }
     } catch {
-      setSummaryError("Сеть недоступна");
+      setSummaryError(t("common.error.network"));
     } finally {
       setSummaryLoading(false);
     }
@@ -231,7 +233,7 @@ export function BookmarkCard({
                 telegram?.haptic.selection();
                 setMediaIndex((i) => (i - 1 + items.length) % items.length);
               }}
-              aria-label="Предыдущее фото"
+              aria-label={t("card.prevPhoto")}
               className="absolute left-3 top-1/2 -translate-y-1/2 flex size-9 items-center justify-center rounded-full bg-black/50 text-white active:scale-90 transition-transform"
             >
               ‹
@@ -242,7 +244,7 @@ export function BookmarkCard({
                 telegram?.haptic.selection();
                 setMediaIndex((i) => (i + 1) % items.length);
               }}
-              aria-label="Следующее фото"
+              aria-label={t("card.nextPhoto")}
               className="absolute right-3 top-1/2 -translate-y-1/2 flex size-9 items-center justify-center rounded-full bg-black/50 text-white active:scale-90 transition-transform"
             >
               ›
@@ -254,7 +256,7 @@ export function BookmarkCard({
       {/* Info Area */}
       <div className="flex-shrink-0 p-5">
         <h2 className="text-fs-title font-semibold leading-snug text-text line-clamp-3">
-          {bookmark.title || "Без заголовка"}
+          {bookmark.title || t("card.noTitle")}
         </h2>
         {summaryText && (
           <button
@@ -264,7 +266,7 @@ export function BookmarkCard({
             }}
             className="mt-1.5 block w-full text-left text-fs-summary text-muted line-clamp-2"
           >
-            <span className="font-semibold text-text">Кратко: </span>
+            <span className="font-semibold text-text">{t("card.briefPrefix")}</span>
             {summaryText}
           </button>
         )}
@@ -276,7 +278,7 @@ export function BookmarkCard({
             }}
             className="mt-1.5 block w-full text-left text-fs-summary text-muted line-clamp-2"
           >
-            <span className="font-semibold text-text">Кратко: </span>
+            <span className="font-semibold text-text">{t("card.briefPrefix")}</span>
             {bookmark.aiSummary}
           </button>
         )}
@@ -318,7 +320,7 @@ export function BookmarkCard({
             {summaryLoading ? (
               <div className="flex items-center gap-2 rounded-lg bg-surface px-3 py-2">
                 <Loader2 className="size-3.5 animate-spin text-muted" />
-                <span className="text-fs-sm text-muted">Составляю саммари…</span>
+                <span className="text-fs-sm text-muted">{t("card.summaryLoading")}</span>
               </div>
             ) : (
               <>
@@ -330,7 +332,7 @@ export function BookmarkCard({
                   className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-line bg-surface/60 px-3 py-1.5 text-fs-sm font-medium text-muted transition-colors hover:border-accent/40 hover:text-accent active:scale-95"
                 >
                   <Sparkles className="size-3.5" />
-                  Кратко
+                  {t("card.brief")}
                 </button>
                 {summaryError && (
                   <p className="mt-1 text-fs-sm text-danger">{summaryError}</p>
@@ -341,7 +343,7 @@ export function BookmarkCard({
         )}
         {metaFailed && (
           <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-danger/10 px-2 py-1 text-xs font-medium text-danger">
-            ⚠️ Метаданные не загружены
+            {t("card.metaFailed")}
           </div>
         )}
         <div className="mt-auto flex items-center gap-3 pt-4">
@@ -355,7 +357,7 @@ export function BookmarkCard({
               />
             ) : null}
             <span className="truncate text-fs-sm font-semibold uppercase tracking-wider text-muted">
-              {bookmark.domain || "ссылка"}
+              {bookmark.domain || t("card.domainFallback")}
             </span>
           </span>
           <span className="ml-auto flex items-center gap-2">
@@ -368,7 +370,7 @@ export function BookmarkCard({
             {bookmark.readTimeMin > 0 && !isVideo && (
               <span className="flex items-center gap-1 rounded-md bg-surface px-1.5 py-0.5 text-fs-sm font-medium tabular-nums text-muted">
                 <FileText className="size-3.5" />
-                {fmtReadMinutes(bookmark.readTimeMin)}
+                {fmtReadMinutes(bookmark.readTimeMin, lang)}
               </span>
             )}
           </span>
@@ -384,13 +386,13 @@ export function BookmarkCard({
             style={{ opacity: archiveOpacity, scale: archiveScale }}
             className="absolute top-6 right-6 border-2 border-rose-500 text-rose-500 px-3 py-1 rounded-lg rotate-12 font-black bg-black/40"
           >
-            АРХИВ
+            {t("card.sticker.archive")}
           </motion.div>
           <motion.div
             style={{ opacity: laterOpacity, scale: laterScale }}
             className="absolute top-6 left-6 border-2 border-emerald-400 text-emerald-400 px-3 py-1 rounded-lg -rotate-12 font-black bg-black/40"
           >
-            ОСТАВИТЬ
+            {t("card.sticker.keep")}
           </motion.div>
           <motion.div
             style={{ opacity: leftGlow }}
@@ -427,12 +429,12 @@ export function BookmarkCard({
                     <span className="flex min-w-0 items-center gap-1.5">
                       <Sparkles className="size-4 shrink-0 text-accent" />
                       <span className="truncate text-fs-title font-semibold text-text">
-                        {bookmark.title || "Без заголовка"}
+                        {bookmark.title || t("card.noTitle")}
                       </span>
                     </span>
                     <button
                       onClick={() => setSheetOpen(false)}
-                      aria-label="Закрыть"
+                      aria-label={t("common.close")}
                       className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface text-muted transition-colors hover:text-text active:scale-90"
                     >
                       <X className="size-5" />
@@ -440,12 +442,12 @@ export function BookmarkCard({
                   </div>
 
                   <p className="mt-4 text-fs-base leading-relaxed text-text whitespace-pre-line overflow-y-auto hide-scrollbar">
-                    {summaryText ?? bookmark.aiSummary ?? bookmark.description ?? "Кратко недоступно"}
+                    {summaryText ?? bookmark.aiSummary ?? bookmark.description ?? t("card.summaryUnavailable")}
                   </p>
 
                   <div className="mt-5 flex items-center justify-between gap-2 border-t border-line pt-4">
                     <span className="text-fs-sm text-muted">
-                      {bookmark.domain || "ссылка"}
+                      {bookmark.domain || t("card.domainFallback")}
                     </span>
                     <button
                       onClick={() => {
@@ -455,7 +457,7 @@ export function BookmarkCard({
                       className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-fs-sm font-semibold text-accent-text active:scale-95"
                     >
                       <ExternalLink className="size-4" />
-                      Открыть
+                      {t("common.open")}
                     </button>
                   </div>
                 </motion.div>

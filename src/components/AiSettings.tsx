@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useTelegram } from "@/components/TelegramProvider";
+import { useI18n, type TKey } from "@/components/I18nProvider";
 import { PairingSettings } from "@/components/PairingSettings";
 import { Eye, EyeOff, Loader2, RefreshCw, Check, Trash2 } from "lucide-react";
 
@@ -33,14 +34,15 @@ const PROVIDER_LABELS: Record<string, string> = {
   custom: "Custom",
 };
 
-const MODE_LABELS: Record<AiMode, string> = {
-  off: "Выкл",
-  suggest: "Предлагать",
-  auto: "Авто",
+const MODE_LABELS: Record<AiMode, TKey> = {
+  off: "ai.mode.off",
+  suggest: "ai.mode.suggest",
+  auto: "ai.mode.auto",
 };
 
 export function AiSettings() {
   const telegram = useTelegram();
+  const { t } = useI18n();
   const [state, setState] = useState<AiSettingsState>(INITIAL);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -103,7 +105,7 @@ export function AiSettings() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setSaveMsg(data.error || "Ошибка сохранения");
+        setSaveMsg(data.error || t("ai.error.save"));
         return;
       }
       setState({
@@ -117,9 +119,9 @@ export function AiSettings() {
       setCustomUrl(data.customBaseUrl ?? "");
       setNewKey("");
       telegram?.haptic.notification("success");
-      setSaveMsg("Сохранено");
+      setSaveMsg(t("ai.saved"));
     } catch {
-      setSaveMsg("Ошибка сети");
+      setSaveMsg(t("common.error.network"));
     } finally {
       setSaving(false);
     }
@@ -153,7 +155,7 @@ export function AiSettings() {
       });
       telegram?.haptic.notification(data.ok ? "success" : "error");
     } catch {
-      setTestResult({ ok: false, error: "Ошибка сети" });
+      setTestResult({ ok: false, error: t("common.error.network") });
     } finally {
       setTesting(false);
     }
@@ -166,13 +168,13 @@ export function AiSettings() {
       const res = await fetch("/api/settings/ai/models");
       const data = await res.json();
       if (!res.ok || data.error) {
-        setModelsError(data.error || "Не удалось загрузить модели");
+        setModelsError(data.error || t("ai.error.models"));
         setModels(null);
         return;
       }
       setModels((data.models as string[]) ?? []);
     } catch {
-      setModelsError("Ошибка сети");
+      setModelsError(t("common.error.network"));
       setModels(null);
     } finally {
       setModelsLoading(false);
@@ -202,11 +204,11 @@ export function AiSettings() {
             ✨
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-sm font-semibold text-text">AI-помощник</span>
+            <span className="block text-sm font-semibold text-text">{t("ai.assistant")}</span>
             <span className="block truncate text-xs text-muted">
               {state.hasKey
-                ? `${PROVIDER_LABELS[state.provider] ?? state.provider} · ${MODE_LABELS[state.mode]}`
-                : "Не настроен — для умной сортировки"}
+                ? `${PROVIDER_LABELS[state.provider] ?? state.provider} · ${t(MODE_LABELS[state.mode])}`
+                : t("ai.notConfigured")}
             </span>
           </span>
           <span
@@ -216,7 +218,7 @@ export function AiSettings() {
                 : "bg-line text-muted"
             }`}
           >
-            {state.hasKey ? "Включён" : "Выкл"}
+            {state.hasKey ? t("ai.enabled") : t("ai.disabled")}
             <span className={`transition-transform ${expanded ? "rotate-180" : ""}`}>▾</span>
           </span>
         </button>
@@ -234,7 +236,7 @@ export function AiSettings() {
 
               {/* Provider */}
               <h2 className="mt-6 text-xs font-semibold uppercase tracking-wider text-muted">
-                AI-провайдер
+                {t("ai.provider")}
               </h2>
               <div className="mt-2 grid grid-cols-2 gap-2">
                 {Object.entries(PROVIDER_LABELS).map(([key, label]) => (
@@ -258,7 +260,7 @@ export function AiSettings() {
               {/* Custom base URL */}
               {state.provider === "custom" && (
                 <div className="mt-4">
-                  <label className="text-xs text-muted">Base URL</label>
+                  <label className="text-xs text-muted">{t("ai.baseUrl")}</label>
                   <input
                     value={customUrl}
                     onChange={(e) => setCustomUrl(e.target.value)}
@@ -267,11 +269,11 @@ export function AiSettings() {
                         void save({ customBaseUrl: customUrl });
                       }
                     }}
-                    placeholder="https://host:port"
+                    placeholder={t("ai.baseUrlPlaceholder")}
                     className="mt-1.5 w-full rounded-xl bg-surface px-4 py-3 text-sm text-text placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-accent"
                   />
                   <p className="mt-1 text-xs text-muted">
-                    Например: http://localhost:11434 (порт — часть URL, без протокола подставится http://)
+                    {t("ai.baseUrlHint")}
                   </p>
                 </div>
               )}
@@ -280,7 +282,7 @@ export function AiSettings() {
               <div className="mt-5">
                 <div className="flex items-center justify-between">
                   <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
-                    Модель
+                    {t("ai.model")}
                   </h2>
                   <button
                     onClick={() => {
@@ -289,7 +291,7 @@ export function AiSettings() {
                     }}
                     className="text-xs text-accent"
                   >
-                    {manualModel ? "Авто" : "Вручную"}
+                    {manualModel ? t("ai.modelAuto") : t("ai.modelManual")}
                   </button>
                 </div>
                 {manualModel ? (
@@ -301,14 +303,14 @@ export function AiSettings() {
                         onBlur={() => {
                           if (state.model.trim()) void save({ model: state.model.trim() });
                         }}
-                        placeholder="model-id"
+                        placeholder={t("ai.modelIdPlaceholder")}
                         className="w-full rounded-xl bg-surface px-4 py-3 text-sm text-text placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-accent"
                       />
                       <button
                         onClick={() => void loadModels()}
                         disabled={modelsLoading || !state.hasKey}
-                        title="Загрузить список моделей"
-                        aria-label="Загрузить модели"
+                        title={t("ai.loadModels")}
+                        aria-label={t("ai.loadModelsLabel")}
                         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent disabled:opacity-40"
                       >
                         <RefreshCw className={`size-4 ${modelsLoading ? "animate-spin" : ""}`} />
@@ -341,7 +343,7 @@ export function AiSettings() {
                           disabled={modelsLoading || !state.hasKey}
                           className="text-xs text-accent disabled:opacity-40"
                         >
-                          {modelsLoading ? "Загрузка…" : modelsError ? "Повторить загрузку моделей" : "Загрузить список моделей"}
+                          {modelsLoading ? t("ai.modelsLoading") : modelsError ? t("ai.retryModels") : t("ai.loadModels")}
                         </button>
                         {modelsError && <span className="truncate text-xs text-red-400">{modelsError}</span>}
                       </div>
@@ -349,7 +351,7 @@ export function AiSettings() {
                   </div>
                 ) : (
                   <div className="mt-1.5 rounded-xl bg-surface px-4 py-3 text-sm text-text">
-                    {state.model || "Авто (дефолт провайдера)"}
+                    {state.model || t("ai.modelAutoDefault")}
                   </div>
                 )}
               </div>
@@ -357,7 +359,7 @@ export function AiSettings() {
               {/* API key */}
               <div className="mt-5">
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
-                  API-ключ
+                  {t("ai.apiKey")}
                 </h2>
                 <div className="mt-1.5 flex items-center gap-2">
                   <div className="flex flex-1 items-center gap-2 rounded-xl bg-surface px-3 py-2.5">
@@ -365,13 +367,13 @@ export function AiSettings() {
                       type={showKey ? "text" : "password"}
                       value={newKey}
                       onChange={(e) => setNewKey(e.target.value)}
-                      placeholder={state.hasKey ? `Введён: ${state.keyMask ?? "••••"}` : "sk-…"}
+                      placeholder={state.hasKey ? t("ai.keyEntered", { mask: state.keyMask ?? "••••" }) : "sk-…"}
                       autoComplete="off"
                       className="w-full bg-transparent text-sm text-text placeholder:text-muted focus:outline-none"
                     />
                     <button
                       onClick={() => setShowKey((v) => !v)}
-                      aria-label="Показать/скрыть ключ"
+                      aria-label={t("ai.toggleKey")}
                       className="text-muted hover:text-text"
                     >
                       {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -383,20 +385,20 @@ export function AiSettings() {
                       disabled={saving}
                       className="rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-accent-text disabled:opacity-50"
                     >
-                      Сохранить
+                      {t("common.save")}
                     </button>
                   )}
                 </div>
                 {state.hasKey && (
                   <div className="mt-2 flex items-center justify-between">
-                    <p className="text-xs text-success">Ключ сохранён (зашифрован).</p>
+                    <p className="text-xs text-success">{t("ai.keySaved")}</p>
                     <button
                       onClick={() => void save({ clearKey: true })}
                       disabled={saving}
                       className="inline-flex items-center gap-1 rounded-lg bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
                     >
                       <Trash2 className="size-3.5" />
-                      Удалить
+                      {t("common.delete")}
                     </button>
                   </div>
                 )}
@@ -414,7 +416,7 @@ export function AiSettings() {
                   ) : (
                     <RefreshCw className="size-4" />
                   )}
-                  Проверить
+                  {t("ai.test")}
                 </button>
               </div>
               {testResult && (
@@ -424,15 +426,18 @@ export function AiSettings() {
                   }`}
                 >
                   {testResult.ok
-                    ? `✅ OK · ${testResult.model ?? ""} · ${testResult.latencyMs ?? "?"} мс`
-                    : `❌ ${testResult.error ?? "Ошибка"}`}
+                    ? t("ai.testOk", {
+                        model: testResult.model ?? "",
+                        ms: testResult.latencyMs ?? "?",
+                      })
+                    : t("ai.testError", { error: testResult.error ?? t("common.error.generic") })}
                 </div>
               )}
 
               {/* Mode */}
               <div className="mt-6">
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
-                  Режим AI
+                  {t("ai.mode")}
                 </h2>
                 <div className="mt-2 grid grid-cols-3 gap-2">
                   {(Object.keys(MODE_LABELS) as AiMode[]).map((m) => (
@@ -446,13 +451,13 @@ export function AiSettings() {
                           : "bg-surface text-muted hover:text-text"
                       }`}
                     >
-                      {MODE_LABELS[m]}
+                      {t(MODE_LABELS[m])}
                     </button>
                   ))}
                 </div>
                 {!state.hasKey && (
                   <p className="mt-2 text-xs text-muted">
-                    Для режимов «Предлагать»/«Авто» нужен API-ключ.
+                    {t("ai.keyNeeded")}
                   </p>
                 )}
               </div>

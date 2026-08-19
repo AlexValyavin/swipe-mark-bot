@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Plus, Search, AlertTriangle, Check } from "lucide-react";
 import { useTelegram } from "@/components/TelegramProvider";
+import { useI18n } from "@/components/I18nProvider";
 
 type PreviewLink = {
   url: string;
@@ -18,6 +19,7 @@ type Props = {
 
 export function AddModal({ onClose, onSaved }: Props) {
   const telegram = useTelegram();
+  const { t, tp } = useI18n();
   const [input, setInput] = useState("");
   const [preview, setPreview] = useState<PreviewLink[] | null>(null);
   const [checking, setChecking] = useState(false);
@@ -38,12 +40,12 @@ export function AddModal({ onClose, onSaved }: Props) {
       });
       const data = await res.json();
       if (!res.ok) {
-        setErr(data.error || "Ошибка проверки");
+        setErr(data.error || t("add.error.check"));
         return;
       }
       setPreview(data.links || []);
     } catch {
-      setErr("Сеть недоступна");
+      setErr(t("common.error.network"));
     } finally {
       setChecking(false);
     }
@@ -56,7 +58,7 @@ export function AddModal({ onClose, onSaved }: Props) {
     try {
       const urls = preview.filter((l) => !l.duplicate).map((l) => l.url);
       if (urls.length === 0) {
-        setSavedMsg("Дублей не сохраняем — новых ссылок нет");
+        setSavedMsg(t("add.allDups"));
         setSaving(false);
         return;
       }
@@ -67,19 +69,23 @@ export function AddModal({ onClose, onSaved }: Props) {
       });
       const data = await res.json();
       if (!res.ok) {
-        setErr(data.error || "Ошибка сохранения");
+        setErr(data.error || t("add.error.save"));
         return;
       }
       telegram?.haptic.notification("success");
       setSavedMsg(
-        `Сохранено: ${data.created?.length ?? 0} новых, пропущено дублей: ${data.duplicates?.length ?? 0}`
+        t("add.saved", {
+          new: data.created?.length ?? 0,
+          link: tp("words.link", data.created?.length ?? 0),
+          dup: data.duplicates?.length ?? 0,
+        })
       );
       setPreview(null);
       setInput("");
       onSaved();
       setTimeout(onClose, 1200);
     } catch {
-      setErr("Сеть недоступна");
+      setErr(t("common.error.network"));
     } finally {
       setSaving(false);
     }
@@ -104,10 +110,8 @@ export function AddModal({ onClose, onSaved }: Props) {
         className="w-full max-w-sm rounded-t-3xl border border-line bg-surface p-6 sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-base font-bold text-text">Добавить ссылки</h2>
-        <p className="mt-1 text-xs text-muted">
-          Вставь текст со ссылками — найдём дубли и предложим сохранить только новые.
-        </p>
+        <h2 className="text-base font-bold text-text">{t("add.title")}</h2>
+        <p className="mt-1 text-xs text-muted">{t("add.text")}</p>
 
         <div className="mt-4 flex items-center gap-2">
           <div className="flex flex-1 items-center gap-2 rounded-xl bg-bg px-3 py-2.5">
@@ -121,7 +125,7 @@ export function AddModal({ onClose, onSaved }: Props) {
               onKeyDown={(e) => {
                 if (e.key === "Enter") void check();
               }}
-              placeholder="Ссылки или текст с ссылками…"
+              placeholder={t("add.placeholder")}
               className="w-full bg-transparent text-sm text-text placeholder:text-muted focus:outline-none"
             />
           </div>
@@ -155,7 +159,7 @@ export function AddModal({ onClose, onSaved }: Props) {
                 <span className="min-w-0 flex-1 truncate text-text">{l.url}</span>
                 {l.duplicate && (
                   <span className="shrink-0 rounded bg-yellow-500/15 px-1.5 py-0.5 font-medium text-yellow-500">
-                    дубль
+                    {t("add.duplicate")}
                   </span>
                 )}
               </div>
@@ -175,7 +179,7 @@ export function AddModal({ onClose, onSaved }: Props) {
             onClick={onClose}
             className="flex-1 rounded-full bg-surface py-2.5 text-sm font-medium text-muted hover:bg-line"
           >
-            Отмена
+            {t("common.cancel")}
           </button>
           <button
             onClick={() => void save()}
@@ -184,8 +188,15 @@ export function AddModal({ onClose, onSaved }: Props) {
           >
             <Plus className="size-4" />
             {newCount === 0 && dupCount === 0
-              ? "Проверь ссылки"
-              : `Сохранить (${newCount} новых${dupCount > 0 ? `, ${dupCount} дублей` : ""})`}
+              ? t("add.check")
+              : t("add.save", {
+                  new: newCount,
+                  link: tp("words.link", newCount),
+                  dups:
+                    dupCount > 0
+                      ? `, ${dupCount} ${tp("words.dup", dupCount)}`
+                      : "",
+                })}
           </button>
         </div>
       </motion.div>
@@ -194,11 +205,12 @@ export function AddModal({ onClose, onSaved }: Props) {
 }
 
 export function AddButton({ onOpen }: { onOpen: () => void }) {
+  const { t } = useI18n();
   return (
     <button
       onClick={onOpen}
-      aria-label="Добавить"
-      title="Добавить"
+      aria-label={t("add.add")}
+      title={t("add.add")}
       className="flex size-9 items-center justify-center rounded-full bg-accent/15 text-accent transition-colors hover:bg-accent/25 active:scale-90"
     >
       <Plus className="size-4" />

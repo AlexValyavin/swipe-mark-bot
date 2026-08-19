@@ -1,6 +1,7 @@
 import "./globals.css";
 import { ReactNode } from "react";
 import { TelegramProvider } from "@/components/TelegramProvider";
+import { I18nProvider } from "@/components/I18nProvider";
 import { RegisterSW } from "@/components/RegisterSW";
 
 export const metadata = {
@@ -29,7 +30,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ru">
       <body className="bg-bg text-text antialiased h-dvh w-full overflow-hidden">
-        <TelegramProvider>{children}</TelegramProvider>
+        <TelegramProvider>
+          <I18nProvider>{children}</I18nProvider>
+        </TelegramProvider>
         <RegisterSW />
       </body>
     </html>

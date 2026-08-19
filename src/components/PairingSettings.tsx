@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { Copy, ExternalLink, Link2, Loader2, QrCode, Unlink } from "lucide-react";
 import { useTelegram } from "@/components/TelegramProvider";
+import { useI18n } from "@/components/I18nProvider";
 
 type PairingState = {
   linked: boolean;
@@ -15,6 +16,7 @@ type PairingState = {
 
 export function PairingSettings() {
   const telegram = useTelegram();
+  const { t, lang } = useI18n();
   const [state, setState] = useState<PairingState>({
     linked: false,
     telegramUsername: null,
@@ -86,13 +88,13 @@ export function PairingSettings() {
       const res = await fetch("/api/pairing/generate", { method: "POST" });
       const data = await res.json();
       if (!res.ok || data.error) {
-        setMsg(data.error || "Ошибка генерации кода");
+        setMsg(data.error || t("pairing.error.generate"));
         return;
       }
       setState((s) => ({ ...s, code: data.code, expiresAt: data.expiresAt }));
       telegram?.haptic.selection();
     } catch {
-      setMsg("Ошибка сети");
+      setMsg(t("common.error.network"));
     } finally {
       setGenerating(false);
     }
@@ -117,13 +119,13 @@ export function PairingSettings() {
       const res = await fetch("/api/pairing/unlink", { method: "POST" });
       const data = await res.json();
       if (!res.ok || data.error) {
-        setMsg(data.error || "Ошибка отвязки");
+        setMsg(data.error || t("pairing.error.unlink"));
         return;
       }
       setState({ linked: false, telegramUsername: null, linkedAt: null, code: null, expiresAt: null });
       telegram?.haptic.notification("success");
     } catch {
-      setMsg("Ошибка сети");
+      setMsg(t("common.error.network"));
     } finally {
       setUnlinking(false);
     }
@@ -139,7 +141,7 @@ export function PairingSettings() {
     <div className="mt-6 rounded-2xl border border-line bg-surface p-4">
       <div className="flex items-center gap-2">
         <Link2 className="size-4 text-accent" />
-        <h2 className="text-sm font-bold text-text">Привязка Telegram</h2>
+        <h2 className="text-sm font-bold text-text">{t("pairing.title")}</h2>
       </div>
 
       {loading ? (
@@ -158,7 +160,7 @@ export function PairingSettings() {
               </p>
               {state.linkedAt && (
                 <p className="text-xs text-muted">
-                  Привязан {new Date(state.linkedAt).toLocaleDateString("ru-RU")}
+                  {t("pairing.linked", { date: new Date(state.linkedAt).toLocaleDateString(lang) })}
                 </p>
               )}
             </div>
@@ -168,14 +170,14 @@ export function PairingSettings() {
               className="inline-flex items-center gap-1 rounded-xl bg-red-500/10 px-3 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
             >
               <Unlink className="size-3.5" />
-              {unlinking ? "…" : "Отвязать"}
+              {unlinking ? "…" : t("pairing.unlink")}
             </button>
           </div>
         </div>
       ) : state.code ? (
         <div className="mt-3">
           <p className="text-xs text-muted">
-            Открой бота SwipeMark и отправь команду со своим кодом:
+            {t("pairing.instr")}
           </p>
           <div className="mt-2 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 rounded-xl bg-bg px-4 py-3">
@@ -184,7 +186,7 @@ export function PairingSettings() {
               </span>
               <button
                 onClick={() => void copy()}
-                aria-label="Скопировать код"
+                aria-label={t("pairing.copyCode")}
                 className="text-muted hover:text-text"
               >
                 {copied ? <span className="text-xs text-success">✓</span> : <Copy className="size-4" />}
@@ -210,7 +212,7 @@ export function PairingSettings() {
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent/15 py-2.5 text-sm font-semibold text-accent"
               >
                 <Copy className="size-4" />
-                {copied ? "Скопировано" : "Скопировать код"}
+                {copied ? t("pairing.copied") : t("pairing.copyCode")}
               </button>
               <button
                 onClick={() => {
@@ -220,7 +222,7 @@ export function PairingSettings() {
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-surface py-2.5 text-sm font-medium text-text hover:bg-line"
               >
                 <ExternalLink className="size-4" />
-                Открыть Telegram
+                {t("pairing.openTelegram")}
               </button>
             </div>
           </div>
@@ -228,17 +230,17 @@ export function PairingSettings() {
           <div className="mt-3 flex items-center gap-2">
             <QrCode className="size-4 text-muted" />
             <p className="text-xs text-muted">
-              Отсканируй QR с телефона или открой бота по кнопке выше.
+              {t("pairing.qrHint")}
             </p>
           </div>
           {expiresIn <= 60 && (
-            <p className="mt-2 text-xs text-red-400">Код скоро истечёт. Сгенерируй новый.</p>
+            <p className="mt-2 text-xs text-red-400">{t("pairing.expiring")}</p>
           )}
         </div>
       ) : (
         <div className="mt-3">
           <p className="text-xs text-muted">
-            Свяжи свой Telegram-аккаунт с профилем SwipeMark, чтобы бот узнавал тебя и привязывал сохранения.
+            {t("pairing.desc")}
           </p>
           <button
             onClick={() => void generate()}
@@ -246,7 +248,7 @@ export function PairingSettings() {
             className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 text-sm font-semibold text-accent-text disabled:opacity-50"
           >
             {generating ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" />}
-            {generating ? "Генерация…" : "Привязать Telegram"}
+            {generating ? t("pairing.generate") : t("pairing.link")}
           </button>
         </div>
       )}

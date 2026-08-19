@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 import { useTelegram } from "@/components/TelegramProvider";
+import { useI18n } from "@/components/I18nProvider";
 import { SourceBadge, MetaStatusDot } from "@/components/SourceBadge";
 
 export type FolderMeta = {
@@ -38,7 +39,7 @@ export type FolderMeta = {
 type LibraryTab = "deck" | "later" | "archive";
 
 /** Группировка по дате: Сегодня / На этой неделе / Раньше. */
-function groupByPeriod(list: Bookmark[]) {
+function groupByPeriod(list: Bookmark[], labels: { today: string; week: string; earlier: string }) {
   const now = new Date();
   const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const dow = (now.getDay() + 6) % 7; // 0 = понедельник
@@ -53,25 +54,25 @@ function groupByPeriod(list: Bookmark[]) {
     else if (t >= startWeek) week.push(b);
     else earlier.push(b);
   }
-  if (today.length) groups.push({ label: "Сегодня", items: today });
-  if (week.length) groups.push({ label: "На этой неделе", items: week });
-  if (earlier.length) groups.push({ label: "Раньше", items: earlier });
+  if (today.length) groups.push({ label: labels.today, items: today });
+  if (week.length) groups.push({ label: labels.week, items: week });
+  if (earlier.length) groups.push({ label: labels.earlier, items: earlier });
   return groups;
 }
 
-function fmtDate(iso: string): string {
+function fmtDate(iso: string, lang: "ru" | "en"): string {
   const d = new Date(iso);
   const startToday = new Date();
   startToday.setHours(0, 0, 0, 0);
   const startWeek = new Date(startToday);
   startWeek.setDate(startWeek.getDate() - ((startToday.getDay() + 6) % 7));
   if (d.getTime() >= startToday.getTime()) {
-    return d.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleTimeString(lang, { hour: "2-digit", minute: "2-digit" });
   }
   if (d.getTime() >= startWeek.getTime()) {
-    return d.toLocaleDateString("ru", { weekday: "short" });
+    return d.toLocaleDateString(lang, { weekday: "short" });
   }
-  return d.toLocaleDateString("ru", { day: "numeric", month: "short" });
+  return d.toLocaleDateString(lang, { day: "numeric", month: "short" });
 }
 
 function fmtDuration(sec?: number | null): string | null {
@@ -81,9 +82,9 @@ function fmtDuration(sec?: number | null): string | null {
   return `⏱ ${m}:${s.toString().padStart(2, "0")}`;
 }
 
-function fmtReadMinutes(min?: number | null): string | null {
+function fmtReadMinutes(min?: number | null, lang: "ru" | "en" = "ru"): string | null {
   if (!min || min <= 0) return null;
-  return `📖 ~${min} мин`;
+  return `📖 ~${min} ${lang === "en" ? "min" : "мин"}`;
 }
 
 type Props = {
@@ -104,6 +105,7 @@ export function Library({
   onOpenFolderDeck,
 }: Props) {
   const telegram = useTelegram();
+  const { t, lang } = useI18n();
   const [tab, setTab] = useState<LibraryTab>("deck");
   const [folderId, setFolderId] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -143,10 +145,10 @@ export function Library({
       const data = await res.json();
       if (!data.error) {
         setAvailableTags(
-          (data.tags || []).map((t: { id: string; name: string; count: number }) => ({
-            id: t.id,
-            name: t.name,
-            count: t.count,
+          (data.tags || []).map((tag: { id: string; name: string; count: number }) => ({
+            id: tag.id,
+            name: tag.name,
+            count: tag.count,
           }))
         );
       }
@@ -184,7 +186,7 @@ export function Library({
       });
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Ошибка загрузки");
+      setError(e instanceof Error ? e.message : t("app.error.load"));
     } finally {
       setLoading(false);
     }
@@ -228,8 +230,8 @@ export function Library({
     });
     const data = await res.json();
     if (!res.ok) {
-      if (res.status === 409) return { error: "Такая папка уже есть" };
-      return { error: data.error || "Ошибка создания" };
+      if (res.status === 409) return { error: t("folder.exists") };
+      return { error: data.error || t("folder.createError") };
     }
     telegram?.haptic.selection();
     await load();
@@ -276,7 +278,7 @@ export function Library({
   const toggleTag = (name: string) => {
     telegram?.haptic.selection();
     setSelectedTags((prev) =>
-      prev.includes(name) ? prev.filter((t) => t !== name) : [...prev, name]
+      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
     );
   };
 
@@ -287,15 +289,15 @@ export function Library({
       body: JSON.stringify({ names }),
     });
     const data = await res.json();
-    if (!res.ok) return data?.error || "Ошибка сохранения тегов";
+    if (!res.ok) return data?.error || t("tag.saveError");
     telegram?.haptic.selection();
     await Promise.all([load(), loadTags()]);
     return null;
   };
 
   const toggleTagOnCard = (card: Bookmark, name: string) => {
-    const cur = card.tags?.map((t) => t.name) ?? [];
-    const next = cur.includes(name) ? cur.filter((t) => t !== name) : [...cur, name];
+    const cur = card.tags?.map((tag) => tag.name) ?? [];
+    const next = cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name];
     setTagMenuCard({ ...card, tags: next.map((n) => ({ id: "tmp-" + n, name: n })) });
   };
 
@@ -434,8 +436,8 @@ export function Library({
   };
 
   const tabs: { key: LibraryTab; label: string }[] = [
-    { key: "deck", label: "Разобрать" },
-    { key: "later", label: "Потом" },
+    { key: "deck", label: t("library.tab.deck") },
+    { key: "later", label: t("library.tab.later") },
   ];
 
   const activeFolders = useMemo(
@@ -450,31 +452,31 @@ export function Library({
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Header: title + search + filters */}
       <div className="flex items-center gap-2 px-5 py-2">
-        <h1 className="shrink-0 text-lg font-bold text-text">Мои сохранёнки</h1>
+        <h1 className="shrink-0 text-lg font-bold text-text">{t("library.title")}</h1>
         <div className="flex flex-1 items-center gap-2 rounded-xl bg-surface px-3 py-2">
           <Search className="size-4 text-muted" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Поиск по названию…"
+            placeholder={t("library.searchPlaceholder")}
             className="w-full bg-transparent text-sm text-text placeholder:text-muted focus:outline-none"
           />
           {q && (
-            <button onClick={() => setQ("")} aria-label="Очистить">
+            <button onClick={() => setQ("")} aria-label={t("library.clear")}>
               <X className="size-4 text-muted" />
             </button>
           )}
         </div>
         <button
           onClick={refresh}
-          aria-label="Обновить"
+          aria-label={t("library.refresh")}
           className="flex size-9 items-center justify-center rounded-full bg-surface text-muted active:scale-90"
         >
           <RefreshCw className="size-4" />
         </button>
         <button
           onClick={() => setFiltersOpen(true)}
-          aria-label="Фильтры"
+          aria-label={t("library.filters")}
           className="relative flex size-9 items-center justify-center rounded-full bg-surface text-muted active:scale-90"
         >
           <SlidersHorizontal className="size-4" />
@@ -497,7 +499,7 @@ export function Library({
               : "bg-surface text-muted hover:text-text"
           }`}
         >
-          <span>Все</span>
+          <span>{t("library.chip.all")}</span>
           <span className="opacity-60">
             {tab === "archive" ? tabCounts.archived : tab === "later" ? tabCounts.readLater : tabCounts.inDeck}
           </span>
@@ -524,7 +526,7 @@ export function Library({
                   e.stopPropagation();
                   setDeleteOpen(f.id);
                 }}
-                aria-label="Удалить папку"
+                aria-label={t("library.deleteFolder")}
                 className="ml-0.5 flex size-4 items-center justify-center rounded-full hover:bg-black/20"
               >
                 <X className="size-3" />
@@ -544,12 +546,12 @@ export function Library({
           }`}
         >
           <Sparkles className="size-3.5" />
-          <span>Неразобранное</span>
+          <span>{t("library.chip.unsorted")}</span>
           <span className="opacity-60">{unsortedCount}</span>
         </button>
         <button
           onClick={() => setCreateOpen(true)}
-          aria-label="Создать папку"
+          aria-label={t("library.createFolder")}
           className="flex size-7 shrink-0 items-center justify-center rounded-full bg-surface text-muted transition-colors hover:text-text active:scale-90"
         >
           <Plus className="size-4" />
@@ -557,11 +559,11 @@ export function Library({
         {selectMode && (
           <button
             onClick={exitSelect}
-            aria-label="Выйти из выбора"
+            aria-label={t("library.exitSelect")}
             className="flex shrink-0 items-center gap-1 rounded-full bg-accent px-3 py-1.5 text-xs font-semibold text-accent-text"
           >
             <CheckCheck className="size-3.5" />
-            Готово · {selectedIds.size}
+            {t("library.doneCount", { count: selectedIds.size })}
           </button>
         )}
       </div>
@@ -577,7 +579,7 @@ export function Library({
             className="flex w-full items-center gap-2 rounded-xl bg-accent/15 px-3 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent/25 active:scale-[0.98]"
           >
             <Sparkles className="size-3.5" />
-            <span>Разложить с AI</span>
+            <span>{t("library.aiSort")}</span>
             <span className="ml-auto opacity-60">→</span>
           </button>
         </div>
@@ -586,22 +588,22 @@ export function Library({
       {/* Segment tabs со счётчиками */}
       <div className="px-5 py-1.5">
         <div className="flex items-center rounded-xl bg-surface p-1">
-          {tabs.map((t) => (
+          {tabs.map((tabOpt) => (
             <button
-              key={t.key}
+              key={tabOpt.key}
               onClick={() => {
                 telegram?.haptic.selection();
-                setTab(t.key);
+                setTab(tabOpt.key);
               }}
               className={`flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-2 text-sm font-medium transition-colors ${
-                tab === t.key ? "bg-accent text-accent-text" : "text-muted hover:text-text"
+                tab === tabOpt.key ? "bg-accent text-accent-text" : "text-muted hover:text-text"
               }`}
             >
-              <span>{t.label}</span>
-              <span className={`text-xs ${tab === t.key ? "opacity-70" : "opacity-60"}`}>
-                {t.key === "archive"
+              <span>{tabOpt.label}</span>
+              <span className={`text-xs ${tab === tabOpt.key ? "opacity-70" : "opacity-60"}`}>
+                {tabOpt.key === "archive"
                   ? tabCounts.archived
-                  : t.key === "later"
+                  : tabOpt.key === "later"
                     ? tabCounts.readLater
                     : tabCounts.inDeck}
               </span>
@@ -648,12 +650,12 @@ export function Library({
             onClick={() => {
               const f = folders.find((x) => x.id === folderId);
               telegram?.haptic.selection();
-              onOpenFolderDeck?.(folderId, f?.name || "Без названия");
+              onOpenFolderDeck?.(folderId, f?.name || t("library.untitled"));
             }}
             className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-accent/15 px-3 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent/25 active:scale-[0.98]"
           >
             <Inbox className="size-3.5" />
-            Разобрать эту папку
+            {t("library.sortFolder")}
           </button>
         </div>
       )}
@@ -670,7 +672,7 @@ export function Library({
             className="flex shrink-0 items-center gap-1 rounded-full bg-surface px-3 py-2 text-xs font-medium text-text"
           >
             <CheckCheck className="size-3.5" />
-            {selectedIds.size === bookmarks.length ? "Снять все" : "Выбрать все"}
+            {selectedIds.size === bookmarks.length ? t("library.deselectAll") : t("library.selectAll")}
           </button>
           <button
             onClick={() => {
@@ -681,7 +683,7 @@ export function Library({
             className="flex shrink-0 items-center gap-1 rounded-full bg-surface px-3 py-2 text-xs font-medium text-accent disabled:opacity-50"
           >
             <Folder className="size-3.5" />
-            В папку
+            {t("library.mass.folder")}
           </button>
           <button
             onClick={() => {
@@ -692,7 +694,7 @@ export function Library({
             className="flex shrink-0 items-center gap-1 rounded-full bg-surface px-3 py-2 text-xs font-medium text-accent disabled:opacity-50"
           >
             <Tag className="size-3.5" />
-            Тег
+            {t("library.mass.tag")}
           </button>
           <button
             onClick={() => void runBulk("archive")}
@@ -700,7 +702,7 @@ export function Library({
             className="flex shrink-0 items-center gap-1 rounded-full bg-surface px-3 py-2 text-xs font-medium text-muted disabled:opacity-50"
           >
             <Archive className="size-3.5" />
-            В архив
+            {t("library.mass.archive")}
           </button>
           <button
             onClick={() => void runBulk("toDeck")}
@@ -708,7 +710,7 @@ export function Library({
             className="flex shrink-0 items-center gap-1 rounded-full bg-surface px-3 py-2 text-xs font-medium text-muted disabled:opacity-50"
           >
             <ArrowUp className="size-3.5" />
-            В колоду
+            {t("library.mass.deck")}
           </button>
           <button
             onClick={() => void runBulkAi()}
@@ -716,7 +718,7 @@ export function Library({
             className="flex shrink-0 items-center gap-1 rounded-full bg-surface px-3 py-2 text-xs font-medium text-accent disabled:opacity-50"
           >
             <Bot className="size-3.5" />
-            Распределить
+            {t("library.mass.sort")}
           </button>
           <button
             onClick={() => void runBulk("delete")}
@@ -724,7 +726,7 @@ export function Library({
             className="flex shrink-0 items-center gap-1 rounded-full bg-red-600/20 px-3 py-2 text-xs font-medium text-red-400 disabled:opacity-50"
           >
             <Trash2 className="size-3.5" />
-            Удалить
+            {t("library.mass.delete")}
           </button>
         </div>
       )}
@@ -756,7 +758,7 @@ export function Library({
                 setMassTagInput("");
               }
             }}
-            placeholder="Название тега…"
+            placeholder={t("library.massTagPlaceholder")}
             maxLength={40}
             className="w-40 shrink-0 rounded-xl bg-bg px-3 py-1.5 text-xs text-text placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-accent"
           />
@@ -771,16 +773,16 @@ export function Library({
             className="flex shrink-0 items-center gap-1 rounded-full bg-accent px-3 py-1.5 text-xs font-medium text-accent-text disabled:opacity-50"
           >
             <Plus className="size-3.5" />
-            Добавить
+            {t("common.add")}
           </button>
-          {availableTags.slice(0, 8).map((t) => (
+          {availableTags.slice(0, 8).map((tag) => (
             <button
-              key={t.id}
-              onClick={() => void massAddTag(t.name)}
+              key={tag.id}
+              onClick={() => void massAddTag(tag.name)}
               disabled={massBusy}
               className="flex shrink-0 items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-xs font-medium text-accent disabled:opacity-50"
             >
-              <span>#{t.name}</span>
+              <span>#{tag.name}</span>
             </button>
           ))}
         </div>
@@ -803,32 +805,36 @@ export function Library({
             </div>
             <p className="text-sm font-medium text-text">
               {q
-                ? "Ничего не найдено"
+                ? t("library.empty.search")
                 : selectedTags.length > 0
-                  ? "Нет карточек с этими тегами"
+                  ? t("library.empty.tags")
                   : folderId === "unsorted"
-                    ? "Неразобранных нет"
+                    ? t("library.empty.unsorted")
                     : folderId
-                      ? "В папке пока пусто"
+                      ? t("library.empty.folder")
                       : tab === "archive"
-                        ? "Архив пуст"
-                        : "Пока пусто…"}
+                        ? t("library.empty.archive")
+                        : t("library.empty.default")}
             </p>
             <p className="text-xs text-muted">
               {q
-                ? "Попробуй изменить запрос или сбросить теги"
+                ? t("library.empty.searchHint")
                 : selectedTags.length > 0
-                  ? "Сбрось теги, чтобы увидеть все карточки"
+                  ? t("library.empty.tagsHint")
                   : folderId === "unsorted"
-                    ? "Все карточки уже разложены по папкам"
+                    ? t("library.empty.unsortedHint")
                     : folderId
-                      ? "Добавь карточки в эту папку"
-                      : "Отправь ссылку боту — карточки появятся здесь"}
+                      ? t("library.empty.folderHint")
+                      : t("library.empty.defaultHint")}
             </p>
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto p-4 hide-scrollbar">
-            {groupByPeriod(bookmarks).map((g) => (
+            {groupByPeriod(bookmarks, {
+              today: t("library.group.today"),
+              week: t("library.group.week"),
+              earlier: t("library.group.earlier"),
+            }).map((g) => (
               <div key={g.label} className="mb-3">
                 <h3 className="mb-1.5 px-1 text-xs font-semibold uppercase tracking-wider text-muted">
                   {g.label}
@@ -886,14 +892,14 @@ export function Library({
                         </p>
                         {b.metaStatus === "failed" && (
                           <span className="mt-0.5 inline-flex items-center gap-1 rounded bg-danger/10 px-1.5 py-0.5 text-[10px] font-medium text-danger">
-                            ⚠️ Не удалось загрузить
+                            {t("library.loadFailed")}
                           </span>
                         )}
                         <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted">
                           <SourceBadge bookmark={b} />
                           {fmtDuration(b.durationSeconds)}
-                          {fmtReadMinutes(b.readTimeMin)}
-                          <span>{fmtDate(b.createdAt)}</span>
+                          {fmtReadMinutes(b.readTimeMin, lang)}
+                          <span>{fmtDate(b.createdAt, lang)}</span>
                         </div>
                         {b.folders && b.folders.length > 0 && (
                           <div className="mt-0.5 flex items-center gap-1 overflow-hidden">
@@ -912,12 +918,12 @@ export function Library({
                         )}
                         {b.tags && b.tags.length > 0 && (
                           <div className="mt-0.5 flex items-center gap-1 overflow-hidden">
-                            {b.tags.slice(0, 2).map((t) => (
+                            {b.tags.slice(0, 2).map((tag) => (
                               <span
-                                key={t.id}
+                                key={tag.id}
                                 className="max-w-[90px] truncate rounded bg-bg px-1.5 py-0.5 text-[10px] text-accent"
                               >
-                                #{t.name}
+                                #{tag.name}
                               </span>
                             ))}
                             {b.tags.length > 2 && (
@@ -929,7 +935,7 @@ export function Library({
                           <div className="mt-0.5 flex items-center gap-1">
                             <span className="flex items-center gap-1 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent">
                               <Sparkles className="size-3" />
-                              AI: {b.aiFolderName}
+                              {t("library.aiBadge", { name: b.aiFolderName })}
                               {typeof b.aiConfidence === "number" && (
                                 <span className="opacity-60">
                                   {Math.round(b.aiConfidence * 100)}%
@@ -938,16 +944,16 @@ export function Library({
                             </span>
                             <button
                               onClick={() => void acceptAi(b)}
-                              aria-label="Принять подсказку AI"
-                              title="Принять"
+                              aria-label={t("library.acceptAi")}
+                              title={t("library.accept")}
                               className="flex size-5 items-center justify-center rounded-full bg-success/20 text-success active:scale-90"
                             >
                               <Check className="size-3" />
                             </button>
                             <button
                               onClick={() => void dismissAi(b)}
-                              aria-label="Отклонить подсказку AI"
-                              title="Отклонить"
+                              aria-label={t("library.rejectAi")}
+                              title={t("library.reject")}
                               className="flex size-5 items-center justify-center rounded-full bg-bg text-muted active:scale-90"
                             >
                               <X className="size-3" />
@@ -962,8 +968,8 @@ export function Library({
                               telegram?.haptic.selection();
                               onPostpone(b);
                             }}
-                            aria-label="Позже"
-                            title="Позже"
+                            aria-label={t("deck.btn.later")}
+                            title={t("deck.btn.later")}
                             className="flex size-9 items-center justify-center rounded-full bg-surface text-success hover:bg-line active:scale-90"
                           >
                             <Clock className="size-4" />
@@ -975,8 +981,8 @@ export function Library({
                               telegram?.haptic.selection();
                               onReturnToDeck(b);
                             }}
-                            aria-label="Вернуть в стопку"
-                            title="Вернуть в стопку"
+                            aria-label={t("library.toDeck")}
+                            title={t("library.toDeck")}
                             className="flex size-9 items-center justify-center rounded-full bg-surface text-muted hover:bg-line active:scale-90"
                           >
                             <Undo2 className="size-4" />
@@ -989,8 +995,8 @@ export function Library({
                               setFolderMenuCard(b);
                               setPickerOpen(true);
                             }}
-                            aria-label="В папку"
-                            title="В папку"
+                            aria-label={t("library.mass.folder")}
+                            title={t("library.mass.folder")}
                             className="flex size-9 items-center justify-center rounded-full bg-surface text-accent hover:bg-line active:scale-90"
                           >
                             <Folder className="size-4" />
@@ -1003,8 +1009,8 @@ export function Library({
                               setTagMenuCard(b);
                               setTagPickerOpen(true);
                             }}
-                            aria-label="Теги"
-                            title="Теги"
+                            aria-label={t("library.mass.tag")}
+                            title={t("library.mass.tag")}
                             className="flex size-9 items-center justify-center rounded-full bg-surface text-accent hover:bg-line active:scale-90"
                           >
                             <Tag className="size-4" />
@@ -1016,8 +1022,8 @@ export function Library({
                               telegram?.haptic.impact("medium");
                               onOpen(b);
                             }}
-                            aria-label="Открыть"
-                            title="Открыть"
+                            aria-label={t("common.open")}
+                            title={t("common.open")}
                             className="flex size-9 items-center justify-center rounded-full bg-accent/15 text-accent hover:bg-accent/25 active:scale-90"
                           >
                             <ExternalLink className="size-4" />
@@ -1127,6 +1133,7 @@ function CreateFolderModal({
   onCreate: (name: string, emoji: string) => Promise<{ ok?: boolean; error?: string }>;
 }) {
   const telegram = useTelegram();
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("📁");
   const [err, setErr] = useState<string | null>(null);
@@ -1163,11 +1170,11 @@ function CreateFolderModal({
         className="w-full max-w-sm rounded-t-3xl border border-line bg-surface p-6 sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-base font-bold text-text">Новая папка</h2>
+        <h2 className="text-base font-bold text-text">{t("folder.createTitle")}</h2>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Название (до 40 символов)"
+          placeholder={t("folder.namePlaceholder")}
           maxLength={40}
           autoFocus
           className="mt-4 w-full rounded-xl bg-bg px-4 py-3 text-sm text-text placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-accent"
@@ -1191,14 +1198,14 @@ function CreateFolderModal({
             onClick={onClose}
             className="flex-1 rounded-full bg-surface py-2.5 text-sm font-medium text-muted hover:bg-line"
           >
-            Отмена
+            {t("common.cancel")}
           </button>
           <button
             onClick={submit}
             disabled={saving || !name.trim()}
             className="flex-1 rounded-full bg-accent py-2.5 text-sm font-semibold text-accent-text disabled:opacity-50"
           >
-            Создать
+            {t("folder.create")}
           </button>
         </div>
       </motion.div>
@@ -1215,6 +1222,7 @@ function DeleteFolderModal({
   onClose: () => void;
   onConfirm: (cardsTo: "none" | "archive") => void;
 }) {
+  const { t } = useI18n();
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -1237,10 +1245,10 @@ function DeleteFolderModal({
           </div>
           <div>
             <h2 className="text-base font-bold text-text">
-              Удалить «{folder.emoji || "📁"} {folder.name}»?
+              {t("folder.deleteTitle", { name: `${folder.emoji || "📁"} ${folder.name}` })}
             </h2>
             <p className="text-xs text-muted">
-              {folder.count} карточек в папке
+              {t("folder.deleteCount", { count: folder.count })}
             </p>
           </div>
         </div>
@@ -1249,19 +1257,19 @@ function DeleteFolderModal({
             onClick={() => onConfirm("archive")}
             className="w-full rounded-xl bg-red-600/15 py-2.5 text-sm font-semibold text-red-400 hover:bg-red-600/25"
           >
-            Удалить, карточки в архив
+            {t("folder.deleteToArchive")}
           </button>
           <button
             onClick={() => onConfirm("none")}
             className="w-full rounded-xl bg-surface py-2.5 text-sm font-semibold text-muted hover:bg-line"
           >
-            Удалить, карточки без папки
+            {t("folder.deleteToNone")}
           </button>
           <button
             onClick={onClose}
             className="w-full rounded-xl py-2.5 text-sm text-muted"
           >
-            Отмена
+            {t("common.cancel")}
           </button>
         </div>
       </motion.div>
@@ -1285,6 +1293,7 @@ function FolderPickerModal({
   onCreate: (name: string, emoji: string) => Promise<{ ok?: boolean; error?: string }>;
 }) {
   const telegram = useTelegram();
+  const { t } = useI18n();
   const [newName, setNewName] = useState("");
   const selected = card.folders?.map((f) => f.id) ?? [];
 
@@ -1314,10 +1323,10 @@ function FolderPickerModal({
         className="w-full max-w-sm rounded-t-3xl border border-line bg-surface p-6 sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-base font-bold text-text">Папки карточки</h2>
+        <h2 className="text-base font-bold text-text">{t("folder.pickerTitle")}</h2>
         <div className="mt-3 flex max-h-56 flex-col gap-1 overflow-y-auto hide-scrollbar">
           {folders.length === 0 && (
-            <p className="py-4 text-center text-xs text-muted">Папок пока нет</p>
+            <p className="py-4 text-center text-xs text-muted">{t("folder.pickerEmpty")}</p>
           )}
           {folders.map((f) => (
             <label
@@ -1339,14 +1348,14 @@ function FolderPickerModal({
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="Новая папка…"
+            placeholder={t("folder.pickerPlaceholder")}
             maxLength={40}
             className="flex-1 rounded-xl bg-bg px-4 py-2.5 text-sm text-text placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-accent"
           />
           <button
             onClick={handleCreate}
             disabled={!newName.trim()}
-            aria-label="Создать папку"
+            aria-label={t("library.createFolder")}
             className="flex size-10 items-center justify-center rounded-xl bg-accent/15 text-accent disabled:opacity-40"
           >
             <Plus className="size-5" />
@@ -1357,7 +1366,7 @@ function FolderPickerModal({
             onClick={onClose}
             className="flex-1 rounded-full bg-surface py-2.5 text-sm font-medium text-muted hover:bg-line"
           >
-            Отмена
+            {t("common.cancel")}
           </button>
           <button
             onClick={() => {
@@ -1366,7 +1375,7 @@ function FolderPickerModal({
             }}
             className="flex-1 rounded-full bg-accent py-2.5 text-sm font-semibold text-accent-text"
           >
-            Готово
+            {t("common.done")}
           </button>
         </div>
       </motion.div>
@@ -1392,6 +1401,7 @@ function FiltersSheet({
   onClose: () => void;
 }) {
   const telegram = useTelegram();
+  const { t } = useI18n();
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -1409,7 +1419,7 @@ function FiltersSheet({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-text">Фильтры</h2>
+          <h2 className="text-base font-bold text-text">{t("filters.title")}</h2>
           {selectedTags.length > 0 && (
             <button
               onClick={() => {
@@ -1418,57 +1428,57 @@ function FiltersSheet({
               }}
               className="rounded-lg bg-bg px-2.5 py-1 text-xs font-medium text-muted hover:text-text"
             >
-              Сбросить
+              {t("filters.reset")}
             </button>
           )}
         </div>
         <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted">
-          Показать
+          {t("filters.show")}
         </h3>
         <div className="mt-2 flex items-center rounded-xl bg-bg p-1">
           {(
             [
-              { key: "deck", label: "Разобрать" },
-              { key: "later", label: "Потом" },
-              { key: "archive", label: "Архив" },
+              { key: "deck", label: t("library.tab.deck") },
+              { key: "later", label: t("library.tab.later") },
+              { key: "archive", label: t("library.tab.archive") },
             ] as const
-          ).map((t) => (
+          ).map((opt) => (
             <button
-              key={t.key}
+              key={opt.key}
               onClick={() => {
                 telegram?.haptic.selection();
-                onTabChange(t.key);
+                onTabChange(opt.key);
               }}
               className={`flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-2 text-xs font-medium transition-colors ${
-                tab === t.key ? "bg-accent text-accent-text" : "text-muted hover:text-text"
+                tab === opt.key ? "bg-accent text-accent-text" : "text-muted hover:text-text"
               }`}
             >
-              <span>{t.label}</span>
+              <span>{opt.label}</span>
             </button>
           ))}
         </div>
         <h3 className="mt-5 text-xs font-semibold uppercase tracking-wider text-muted">
-          Теги
+          {t("filters.tags")}
         </h3>
         {tags.length === 0 ? (
-          <p className="mt-2 text-sm text-muted">Тегов пока нет</p>
+          <p className="mt-2 text-sm text-muted">{t("filters.noTags")}</p>
         ) : (
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {tags.map((t) => {
-              const active = selectedTags.includes(t.name);
+            {tags.map((tag) => {
+              const active = selectedTags.includes(tag.name);
               return (
                 <button
-                  key={t.id}
+                  key={tag.id}
                   onClick={() => {
                     telegram?.haptic.selection();
-                    onToggleTag(t.name);
+                    onToggleTag(tag.name);
                   }}
                   className={`flex items-center gap-1 rounded-full px-3 py-2 text-xs font-medium transition-colors ${
                     active ? "bg-accent text-accent-text" : "bg-bg text-muted hover:text-text"
                   }`}
                 >
-                  <span>{t.name}</span>
-                  <span className="opacity-60">{t.count}</span>
+                  <span>{tag.name}</span>
+                  <span className="opacity-60">{tag.count}</span>
                 </button>
               );
             })}
@@ -1479,7 +1489,7 @@ function FiltersSheet({
             onClick={onClose}
             className="w-full rounded-full bg-accent py-2.5 text-sm font-semibold text-accent-text"
           >
-            Готово
+            {t("common.done")}
           </button>
         </div>
       </motion.div>
@@ -1497,6 +1507,7 @@ function AutosortSheet({
   onDone: () => void;
 }) {
   const telegram = useTelegram();
+  const { t } = useI18n();
   const [starting, setStarting] = useState(false);
   const [job, setJob] = useState<{
     jobId: string | null;
@@ -1523,7 +1534,7 @@ function AutosortSheet({
         body: JSON.stringify({ scope: "unsorted" }),
       });
       const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || "Ошибка запуска");
+      if (!res.ok || data.error) throw new Error(data.error || t("autosort.startError"));
       setJob(data);
       telegram?.haptic.impact("medium");
       pollRef.current = window.setInterval(async () => {
@@ -1595,9 +1606,9 @@ function AutosortSheet({
             <Sparkles className="size-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-text">Разложить с AI</h2>
+            <h2 className="text-base font-bold text-text">{t("autosort.title")}</h2>
             <p className="text-xs text-muted">
-              {job ? `Карточек в очереди: ${total}` : `Карточек без папки: ${count}`}
+              {job ? t("autosort.queueCount", { count: total }) : t("autosort.queueCount", { count })}
             </p>
           </div>
         </div>
@@ -1605,21 +1616,20 @@ function AutosortSheet({
         {!job && !starting && (
           <>
             <p className="mt-4 rounded-xl bg-bg px-4 py-3 text-sm text-muted">
-              ИИ распределит карточки по твоим папкам и предложит теги. Каждая карточка — один
-              запрос к твоему ключу.
+              {t("autosort.desc")}
             </p>
             <div className="mt-5 flex gap-2.5">
               <button
                 onClick={onClose}
                 className="flex-1 rounded-full border border-line py-2.5 text-sm font-semibold text-text active:scale-[0.98]"
               >
-                Отмена
+                {t("common.cancel")}
               </button>
               <button
                 onClick={() => void start()}
                 className="flex-1 rounded-full bg-accent py-2.5 text-sm font-semibold text-accent-text active:scale-[0.98]"
               >
-                Распределить {count > 0 ? `(${count})` : ""}
+                {t("autosort.start")}{count > 0 ? ` (${count})` : ""}
               </button>
             </div>
           </>
@@ -1628,7 +1638,7 @@ function AutosortSheet({
         {starting && !job && (
           <div className="mt-5 flex flex-col items-center gap-3 py-4">
             <Loader2 className="size-6 animate-spin text-accent" />
-            <p className="text-sm text-muted">Запускаем…</p>
+            <p className="text-sm text-muted">{t("autosort.starting")}</p>
           </div>
         )}
 
@@ -1639,7 +1649,7 @@ function AutosortSheet({
                 <div className="flex items-center justify-between text-xs text-muted">
                   <span className="flex items-center gap-1.5">
                     <Loader2 className="size-3.5 animate-spin" />
-                    Обработано {done + failed} из {total}
+                    {t("autosort.progress", { done: done + failed, total })}
                   </span>
                   <span>{progress}%</span>
                 </div>
@@ -1652,14 +1662,14 @@ function AutosortSheet({
                   />
                 </div>
                 {failed > 0 && (
-                  <p className="mt-1.5 text-xs text-muted">Не удалось: {failed}</p>
+                  <p className="mt-1.5 text-xs text-muted">{t("autosort.failed", { failed })}</p>
                 )}
                 <div className="mt-5 flex gap-2.5">
                   <button
                     onClick={() => void cancel()}
                     className="flex-1 rounded-full border border-line py-2.5 text-sm font-semibold text-text active:scale-[0.98]"
                   >
-                    Отменить
+                    {t("autosort.cancel")}
                   </button>
                 </div>
               </>
@@ -1668,15 +1678,16 @@ function AutosortSheet({
             {job.status === "done" && (
               <>
                 <p className="mt-4 rounded-xl bg-success/10 px-4 py-3 text-sm text-text">
-                  Готово! Распределено {done} карточек
-                  {failed > 0 ? `, не удалось ${failed}` : ""}.
+                  {failed > 0
+                    ? t("autosort.doneWithFailed", { done, failed })
+                    : t("autosort.done", { done })}
                 </p>
                 <div className="mt-5 flex gap-2.5">
                   <button
                     onClick={onClose}
                     className="flex-1 rounded-full bg-accent py-2.5 text-sm font-semibold text-accent-text active:scale-[0.98]"
                   >
-                    Отлично
+                    {t("autosort.great")}
                   </button>
                 </div>
               </>
@@ -1685,14 +1696,14 @@ function AutosortSheet({
             {job.status === "cancelled" && (
               <>
                 <p className="mt-4 rounded-xl bg-bg px-4 py-3 text-sm text-muted">
-                  Остановлено. Успели распределить {done} из {total}.
+                  {t("autosort.cancelled", { done, total })}
                 </p>
                 <div className="mt-5 flex gap-2.5">
                   <button
                     onClick={onClose}
                     className="flex-1 rounded-full bg-accent py-2.5 text-sm font-semibold text-accent-text active:scale-[0.98]"
                   >
-                    Понятно
+                    {t("autosort.ok")}
                   </button>
                 </div>
               </>
@@ -1701,14 +1712,14 @@ function AutosortSheet({
             {job.status === "error" && (
               <>
                 <p className="mt-4 rounded-xl bg-danger/10 px-4 py-3 text-sm text-text">
-                  Что-то пошло не так. Попробуй ещё раз.
+                  {t("autosort.error")}
                 </p>
                 <div className="mt-5 flex gap-2.5">
                   <button
                     onClick={onClose}
                     className="flex-1 rounded-full bg-accent py-2.5 text-sm font-semibold text-accent-text active:scale-[0.98]"
                   >
-                    Понятно
+                    {t("autosort.ok")}
                   </button>
                 </div>
               </>
@@ -1736,10 +1747,11 @@ function TagPickerModal({
   onClose: () => void;
 }) {
   const telegram = useTelegram();
+  const { t } = useI18n();
   const [input, setInput] = useState("");
-  const selected = card.tags?.map((t) => t.name) ?? [];
+  const selected = card.tags?.map((tag) => tag.name) ?? [];
   const filtered = tags.filter(
-    (t) => !selected.includes(t.name) && t.name.toLowerCase().includes(input.toLowerCase().trim())
+    (tag) => !selected.includes(tag.name) && tag.name.toLowerCase().includes(input.toLowerCase().trim())
   );
   const canAdd = input.trim().length > 0 && !selected.includes(input.trim().toLowerCase());
 
@@ -1767,7 +1779,7 @@ function TagPickerModal({
         className="w-full max-w-sm rounded-t-3xl border border-line bg-surface p-6 sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-base font-bold text-text">Теги карточки</h2>
+        <h2 className="text-base font-bold text-text">{t("tag.pickerTitle")}</h2>
 
         {/* Selected chips */}
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -1782,7 +1794,7 @@ function TagPickerModal({
                   telegram?.haptic.selection();
                   onRemove(name);
                 }}
-                aria-label={`Убрать тег ${name}`}
+                aria-label={t("tag.remove", { name })}
                 className="flex size-3.5 items-center justify-center rounded-full hover:bg-black/20"
               >
                 <X className="size-3" />
@@ -1790,7 +1802,7 @@ function TagPickerModal({
             </span>
           ))}
           {selected.length === 0 && (
-            <span className="text-xs text-muted">Тегов пока нет</span>
+            <span className="text-xs text-muted">{t("tag.pickerEmpty")}</span>
           )}
         </div>
 
@@ -1807,7 +1819,7 @@ function TagPickerModal({
                   addNew();
                 }
               }}
-              placeholder="Добавить тег…"
+              placeholder={t("tag.pickerPlaceholder")}
               maxLength={40}
               className="w-full bg-transparent text-sm text-text placeholder:text-muted focus:outline-none"
             />
@@ -1815,7 +1827,7 @@ function TagPickerModal({
           <button
             onClick={addNew}
             disabled={!canAdd}
-            aria-label="Добавить тег"
+            aria-label={t("tag.add")}
             className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent disabled:opacity-40"
           >
             <Plus className="size-5" />
@@ -1829,25 +1841,25 @@ function TagPickerModal({
             className="mt-2 flex w-full items-center gap-2 rounded-xl bg-bg px-3 py-2.5 text-sm text-accent"
           >
             <Plus className="size-4" />
-            Создать «{input.trim().toLowerCase()}»
+            {t("tag.create", { name: input.trim().toLowerCase() })}
           </button>
         )}
 
         {/* Autocomplete list */}
         {filtered.length > 0 && (
           <div className="mt-2 flex max-h-44 flex-col gap-1 overflow-y-auto hide-scrollbar">
-            {filtered.map((t) => (
+            {filtered.map((tag) => (
               <button
-                key={t.id}
+                key={tag.id}
                 onClick={() => {
                   telegram?.haptic.selection();
-                  onToggle(t.name);
+                  onToggle(tag.name);
                 }}
                 className="flex items-center gap-2 rounded-lg bg-bg px-3 py-2.5 text-left text-sm text-text hover:bg-line"
               >
                 <Tag className="size-4 text-muted" />
-                <span className="flex-1 truncate">{t.name}</span>
-                <span className="text-xs text-muted">{t.count}</span>
+                <span className="flex-1 truncate">{tag.name}</span>
+                <span className="text-xs text-muted">{tag.count}</span>
               </button>
             ))}
           </div>
@@ -1858,7 +1870,7 @@ function TagPickerModal({
             onClick={onClose}
             className="flex-1 rounded-full bg-surface py-2.5 text-sm font-medium text-muted hover:bg-line"
           >
-            Отмена
+            {t("common.cancel")}
           </button>
           <button
             onClick={() => {
@@ -1867,7 +1879,7 @@ function TagPickerModal({
             }}
             className="flex-1 rounded-full bg-accent py-2.5 text-sm font-semibold text-accent-text"
           >
-            Готово
+            {t("common.done")}
           </button>
         </div>
       </motion.div>

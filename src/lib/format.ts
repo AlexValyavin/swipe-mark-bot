@@ -6,9 +6,12 @@ export function fmtDuration(seconds?: number | null): string | null {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export function fmtReadMinutes(minutes?: number | null): string | null {
+export function fmtReadMinutes(
+  minutes?: number | null,
+  lang: "ru" | "en" = "ru"
+): string | null {
   if (!minutes || minutes <= 0 || !Number.isFinite(minutes)) return null;
-  return `~${Math.round(minutes)} мин`;
+  return `~${Math.round(minutes)} ${lang === "en" ? "min" : "мин"}`;
 }
 
 export function fmtDateShort(iso: string): string {

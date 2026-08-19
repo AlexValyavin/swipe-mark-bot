@@ -2,11 +2,54 @@ import { getAdminDb } from "@/lib/db/supabase";
 import type { UserSettingsRow } from "@/lib/db/types";
 
 export type UiScale = "s" | "m" | "l";
+export type AppLang = "ru" | "en";
 
 const UI_SCALE_VALUES: UiScale[] = ["s", "m", "l"];
+const LANG_VALUES: AppLang[] = ["ru", "en"];
 
 export function isUiScale(v: unknown): v is UiScale {
   return typeof v === "string" && (UI_SCALE_VALUES as string[]).includes(v);
+}
+
+export function isAppLang(v: unknown): v is AppLang {
+  return typeof v === "string" && (LANG_VALUES as string[]).includes(v);
+}
+
+export async function getLang(userId: string): Promise<AppLang> {
+  const { data } = await getAdminDb()
+    .from("user_settings")
+    .select("lang")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return isAppLang(data?.lang) ? data.lang : "ru";
+}
+
+export async function setLang(userId: string, lang: AppLang): Promise<void> {
+  const now = new Date().toISOString();
+  const existing = await getAdminDb()
+    .from("user_settings")
+    .select("user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existing.data) {
+    const { error } = await getAdminDb()
+      .from("user_settings")
+      .update({ lang, updated_at: now })
+      .eq("user_id", userId);
+    if (error) throw error;
+  } else {
+    const { error } = await getAdminDb()
+      .from("user_settings")
+      .insert({
+        user_id: userId,
+        ai_mode: "off",
+        archive_ttl_hours: null,
+        lang,
+        updated_at: now,
+      });
+    if (error) throw error;
+  }
 }
 
 export async function getUiScale(userId: string): Promise<UiScale> {

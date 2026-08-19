@@ -6,6 +6,7 @@ import { X, ExternalLink, Clock } from "lucide-react";
 import { BookmarkCard, type SwipeDirection } from "@/components/BookmarkCard";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 import { useTelegram } from "@/components/TelegramProvider";
+import { useI18n } from "@/components/I18nProvider";
 
 export function SwipeDeck({
   bookmarks,
@@ -27,6 +28,7 @@ export function SwipeDeck({
   const [exitX, setExitX] = useState(500);
   const [exitY, setExitY] = useState(0);
   const telegram = useTelegram();
+  const { t } = useI18n();
 
   if (bookmarks.length === 0) return null;
 
@@ -85,7 +87,7 @@ export function SwipeDeck({
               transition={{ delay: 0.3, type: "spring", stiffness: 220, damping: 22 }}
               className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-danger/90 px-3 py-1.5 text-xs font-semibold text-white shadow-lg"
             >
-              ← Архив
+              {t("deck.hint.archive")}
             </motion.div>
             <motion.div
               initial={{ opacity: 0, x: 12 }}
@@ -93,7 +95,7 @@ export function SwipeDeck({
               transition={{ delay: 0.3, type: "spring", stiffness: 220, damping: 22 }}
               className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-success/90 px-3 py-1.5 text-xs font-semibold text-white shadow-lg"
             >
-              Потом →
+              {t("deck.hint.later")}
             </motion.div>
             <motion.div
               initial={{ opacity: 0, y: 12 }}
@@ -101,7 +103,7 @@ export function SwipeDeck({
               transition={{ delay: 0.5, type: "spring", stiffness: 220, damping: 22 }}
               className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-indigo-500/90 px-3 py-1.5 text-xs font-semibold text-white shadow-lg"
             >
-              ↑ Открыть
+              {t("deck.hint.open")}
             </motion.div>
           </div>
         )}
@@ -113,14 +115,14 @@ export function SwipeDeck({
           <div className="flex items-baseline justify-between gap-2">
             <span className="text-[10px] uppercase tracking-wide text-white/70">
               {done !== undefined
-                ? `разобрано ${done} из ${total}`
-                : "осталось"}
+                ? t("deck.progress.done", { done, total })
+                : t("deck.progress.left")}
             </span>
             <span className="text-sm font-bold text-white tabular-nums">
               {done !== undefined
                 ? bookmarks.length === 1
-                  ? "Последняя!"
-                  : `${bookmarks.length} осталось`
+                  ? t("deck.last")
+                  : t("deck.progress.leftCount", { count: bookmarks.length })
                 : bookmarks.length}
             </span>
           </div>
@@ -144,14 +146,14 @@ export function SwipeDeck({
               telegram?.haptic.impact("medium");
               handleSwipe("left");
             }}
-            aria-label="В архив"
-            title="В архив"
+            aria-label={t("deck.btn.archive")}
+            title={t("deck.btn.archive")}
             className="flex size-14 items-center justify-center rounded-full border-2 border-danger/40 bg-surface text-danger transition-transform active:scale-90"
           >
             <X className="size-6" />
           </button>
           {showLabels && (
-            <span className="text-[11px] font-medium text-muted">Архив</span>
+            <span className="text-[11px] font-medium text-muted">{t("deck.btn.archive")}</span>
           )}
         </div>
         <div className="flex flex-col items-center gap-1.5">
@@ -160,14 +162,14 @@ export function SwipeDeck({
               telegram?.haptic.impact("heavy");
               onOpen(current);
             }}
-            aria-label="Открыть"
-            title="Открыть"
+            aria-label={t("deck.btn.open")}
+            title={t("deck.btn.open")}
             className="flex size-16 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-purple-500/40 transition-transform active:scale-90"
           >
             <ExternalLink className="size-7" />
           </button>
           {showLabels && (
-            <span className="text-[11px] font-medium text-muted">Открыть</span>
+            <span className="text-[11px] font-medium text-muted">{t("deck.btn.open")}</span>
           )}
         </div>
         <div className="flex flex-col items-center gap-1.5">
@@ -176,14 +178,14 @@ export function SwipeDeck({
               telegram?.haptic.impact("light");
               handleSwipe("right");
             }}
-            aria-label="Позже"
-            title="Позже"
+            aria-label={t("deck.btn.later")}
+            title={t("deck.btn.later")}
             className="flex size-14 items-center justify-center rounded-full border-2 border-success/40 bg-surface text-success transition-transform active:scale-90"
           >
             <Clock className="size-6" />
           </button>
           {showLabels && (
-            <span className="text-[11px] font-medium text-muted">Потом</span>
+            <span className="text-[11px] font-medium text-muted">{t("deck.btn.later")}</span>
           )}
         </div>
       </div>
