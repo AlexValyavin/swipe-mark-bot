@@ -304,7 +304,7 @@ export function BookmarkCard({
                   className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-line bg-surface/60 px-3 py-1.5 text-fs-sm font-medium text-muted transition-colors hover:border-accent/40 hover:text-accent active:scale-95"
                 >
                   <Sparkles className="size-3.5" />
-                  Саммари
+                  Кратко
                 </button>
                 {summaryError && (
                   <p className="mt-1 text-fs-sm text-danger">{summaryError}</p>
@@ -364,7 +364,7 @@ export function BookmarkCard({
             style={{ opacity: laterOpacity }}
             className="absolute top-6 left-6 border-2 border-emerald-400 text-emerald-400 px-3 py-1 rounded-lg -rotate-12 font-black bg-black/40"
           >
-            ПОТОМ
+            ОСТАВИТЬ
           </motion.div>
           <motion.div
             style={{ opacity: leftGlow }}
@@ -414,7 +414,7 @@ export function BookmarkCard({
                   </div>
 
                   <p className="mt-4 text-fs-base leading-relaxed text-text whitespace-pre-line overflow-y-auto hide-scrollbar">
-                    {summaryText ?? bookmark.aiSummary ?? bookmark.description ?? "Саммари недоступно"}
+                    {summaryText ?? bookmark.aiSummary ?? bookmark.description ?? "Кратко недоступно"}
                   </p>
 
                   <div className="mt-5 flex items-center justify-between gap-2 border-t border-line pt-4">

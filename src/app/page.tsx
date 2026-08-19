@@ -12,7 +12,7 @@ import {
   Trash2,
   X,
   LibraryBig,
-  Settings,
+  MoreHorizontal,
 } from "lucide-react";
 import { useTelegram } from "@/components/TelegramProvider";
 import { SwipeDeck } from "@/components/SwipeDeck";
@@ -26,27 +26,7 @@ import { AddModal, AddButton } from "@/components/AddModal";
 import { UiScaleSettings } from "@/components/UiScaleSettings";
 import { FullscreenSettings } from "@/components/FullscreenSettings";
 
-type Tab = "inbox" | "archive" | "library" | "settings";
-
-function groupByDay(list: Bookmark[]) {
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const startOfYesterday = startOfToday - 86400000;
-  const groups: { label: string; items: Bookmark[] }[] = [];
-  const today: Bookmark[] = [];
-  const yesterday: Bookmark[] = [];
-  const older: Bookmark[] = [];
-  for (const b of list) {
-    const t = new Date(b.createdAt || 0).getTime();
-    if (t >= startOfToday) today.push(b);
-    else if (t >= startOfYesterday) yesterday.push(b);
-    else older.push(b);
-  }
-  if (today.length) groups.push({ label: "Сегодня", items: today });
-  if (yesterday.length) groups.push({ label: "Вчера", items: yesterday });
-  if (older.length) groups.push({ label: "Ранее", items: older });
-  return groups;
-}
+type Tab = "inbox" | "library" | "later";
 
 function typeEmoji(c: Bookmark): string {
   if (c.type === "photo") return "📷";
@@ -74,6 +54,7 @@ export default function Home() {
   const [archiveTtlHours, setArchiveTtlHours] = useState<number | null>(null);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [librarySignal, setLibrarySignal] = useState(0);
   const [counts, setCounts] = useState<{
     inDeck: number;
@@ -287,7 +268,15 @@ export default function Home() {
     telegram?.haptic.selection();
     setLibrarySignal((s) => s + 1);
     setArchived((prev) => prev.filter((b) => b.id !== bookmark.id));
+    setLater((prev) => [...prev.filter((b) => b.id !== bookmark.id), bookmark]);
     postAction(bookmark.id, "later");
+  };
+
+  const archiveFromLater = (bookmark: Bookmark) => {
+    telegram?.haptic.impact("medium");
+    setLater((prev) => prev.filter((b) => b.id !== bookmark.id));
+    setArchived((prev) => [...prev, bookmark]);
+    postAction(bookmark.id, "left");
   };
 
   const setTtl = (hours: number | null, cutoff: number | null) => {
@@ -439,7 +428,6 @@ export default function Home() {
 
   const showHint =
     tab === "inbox" && !folderDeck && deck.length > 0 && !hintDismissed;
-  const groups = groupByDay(archived);
 
   return (
     <div className="app-column mx-auto flex h-dvh w-full flex-col bg-bg">
@@ -464,6 +452,17 @@ export default function Home() {
             className="flex size-9 items-center justify-center rounded-full bg-surface text-muted transition-colors hover:text-text active:scale-90"
           >
             <RefreshCw className="size-4" />
+          </button>
+          <button
+            onClick={() => {
+              telegram?.haptic.selection();
+              setSettingsOpen(true);
+            }}
+            aria-label="Настройки"
+            title="Настройки"
+            className="flex size-9 items-center justify-center rounded-full bg-surface text-muted transition-colors hover:text-text active:scale-90"
+          >
+            <MoreHorizontal className="size-5" />
           </button>
         </div>
       </header>
@@ -578,130 +577,90 @@ export default function Home() {
                 </div>
               )}
             </motion.div>
-          ) : tab === "archive" ? (
+          ) : tab === "library" ? (
+            <Library
+              onOpen={openBookmark}
+              onPostpone={postponeFromArchive}
+              onReturnToDeck={returnToDeck}
+              refreshSignal={librarySignal}
+              onOpenFolderDeck={openFolderDeck}
+            />
+          ) : tab === "later" ? (
             <motion.div
-              key="archive"
+              key="later"
               initial={{ opacity: 0, x: 16 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 16 }}
               transition={{ duration: 0.18 }}
               className="flex min-h-0 flex-1 flex-col"
             >
-              <div className="flex items-center gap-1.5 px-5 py-2">
-                <span className="text-xs text-muted">Очистка архива:</span>
-                {[
-                  { label: "24ч", hours: 24 },
-                  { label: "7д", hours: 168 },
-                  { label: "30д", hours: 720 },
-                  { label: "Выкл", hours: null },
-                ].map((opt) => (
-                  <button
-                    key={String(opt.hours)}
-                    onClick={() =>
-                      setTtl(opt.hours, opt.hours ? Date.now() - opt.hours * 60 * 60 * 1000 : null)
-                    }
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                      archiveTtlHours === opt.hours
-                        ? "bg-accent text-accent-text"
-                        : "bg-surface text-muted hover:text-text"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-                <button
-                  onClick={() => {
-                    telegram?.haptic.impact("medium");
-                    setClearConfirmOpen(true);
-                  }}
-                  disabled={archived.length === 0}
-                  className={`ml-auto inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                    archived.length === 0
-                      ? "cursor-not-allowed bg-surface text-muted/40"
-                      : "bg-red-600/20 text-red-400 hover:bg-red-600/30"
-                  }`}
-                >
-                  <Trash2 className="size-3" />
-                  Очистить
-                </button>
-              </div>
-
-              {archived.length > 0 ? (
+              {later.length > 0 ? (
                 <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4 hide-scrollbar">
-                  {groups.map((g) => (
-                    <div key={g.label}>
-                      <h3 className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted">
-                        {g.label}
-                      </h3>
-                      <div className="flex flex-col gap-1">
-                        {g.items.map((c) => (
-                          <div
-                            key={c.id}
-                            className="group flex items-center gap-3 rounded-xl bg-surface p-3 transition-colors hover:bg-line"
-                          >
-                            {thumbFor(c) ? (
-                              <div className="relative size-12 flex-shrink-0 overflow-hidden rounded-lg bg-bg">
-                                <div className="absolute inset-0 flex items-center justify-center text-xl">
-                                  {typeEmoji(c)}
-                                </div>
-                                <img
-                                  src={thumbFor(c) as string}
-                                  alt=""
-                                  className="absolute inset-0 size-full rounded-lg object-cover"
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = "none";
-                                  }}
-                                />
-                              </div>
-                            ) : (
-                              <div className="flex size-12 flex-shrink-0 items-center justify-center rounded-lg bg-bg text-xl">
-                                {typeEmoji(c)}
-                              </div>
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-text">
-                                {c.title}
-                              </p>
-                              <p className="mt-0.5 text-[11px] text-muted">
-                                {new Date(c.createdAt).toLocaleString("ru", {
-                                  day: "numeric",
-                                  month: "short",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                              </p>
-                            </div>
-                            <div className="flex flex-shrink-0 items-center gap-1">
-                              <button
-                                onClick={() => postponeFromArchive(c)}
-                                aria-label="Позже"
-                                title="Позже"
-                                className="flex size-8 items-center justify-center rounded-full bg-surface text-success transition-colors hover:bg-line active:scale-90"
-                              >
-                                <Clock className="size-4" />
-                              </button>
-                              <button
-                                onClick={() => returnToDeck(c)}
-                                aria-label="Вернуть в стопку"
-                                title="Вернуть в стопку"
-                                className="flex size-8 items-center justify-center rounded-full bg-surface text-muted transition-colors hover:bg-line active:scale-90"
-                              >
-                                <Undo2 className="size-4" />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  telegram?.haptic.impact("medium");
-                                  openBookmark(c);
-                                }}
-                                aria-label="Открыть"
-                                title="Открыть"
-                                className="flex size-8 items-center justify-center rounded-full bg-accent/15 text-accent transition-colors hover:bg-accent/25 active:scale-90"
-                              >
-                                <ExternalLink className="size-4" />
-                              </button>
-                            </div>
+                  {later.map((c) => (
+                    <div
+                      key={c.id}
+                      className="group flex items-center gap-3 rounded-xl bg-surface p-3 transition-colors hover:bg-line"
+                    >
+                      {thumbFor(c) ? (
+                        <div className="relative size-12 flex-shrink-0 overflow-hidden rounded-lg bg-bg">
+                          <div className="absolute inset-0 flex items-center justify-center text-xl">
+                            {typeEmoji(c)}
                           </div>
-                        ))}
+                          <img
+                            src={thumbFor(c) as string}
+                            alt=""
+                            className="absolute inset-0 size-full rounded-lg object-cover"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex size-12 flex-shrink-0 items-center justify-center rounded-lg bg-bg text-xl">
+                          {typeEmoji(c)}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-text">
+                          {c.title}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-muted">
+                          {new Date(c.createdAt).toLocaleString("ru", {
+                            day: "numeric",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                      <div className="flex flex-shrink-0 items-center gap-1">
+                        <button
+                          onClick={() => archiveFromLater(c)}
+                          aria-label="В архив"
+                          title="В архив"
+                          className="flex size-8 items-center justify-center rounded-full bg-surface text-danger transition-colors hover:bg-line active:scale-90"
+                        >
+                          <Archive className="size-4" />
+                        </button>
+                        <button
+                          onClick={() => returnToDeck(c)}
+                          aria-label="Вернуть в разбор"
+                          title="Вернуть в разбор"
+                          className="flex size-8 items-center justify-center rounded-full bg-surface text-muted transition-colors hover:bg-line active:scale-90"
+                        >
+                          <Undo2 className="size-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            telegram?.haptic.impact("medium");
+                            openBookmark(c);
+                          }}
+                          aria-label="Открыть"
+                          title="Открыть"
+                          className="flex size-8 items-center justify-center rounded-full bg-accent/15 text-accent transition-colors hover:bg-accent/25 active:scale-90"
+                        >
+                          <ExternalLink className="size-4" />
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -714,38 +673,14 @@ export default function Home() {
                     transition={{ type: "spring", stiffness: 200, damping: 15 }}
                     className="text-5xl"
                   >
-                    🗂️
+                    ⏰
                   </motion.div>
-                  <p className="text-text">Архив пуст</p>
-                  <p className="text-sm text-muted">Свайпни влево, чтобы отправить в архив</p>
+                  <p className="text-text">Здесь ничего нет</p>
+                  <p className="text-sm text-muted">
+                    Свайпни вправо, чтобы отложить карточку на потом
+                  </p>
                 </div>
               )}
-            </motion.div>
-          ) : tab === "library" ? (
-            <Library
-              onOpen={openBookmark}
-              onPostpone={postponeFromArchive}
-              onReturnToDeck={returnToDeck}
-              refreshSignal={librarySignal}
-              onOpenFolderDeck={openFolderDeck}
-            />
-          ) : tab === "settings" ? (
-            <motion.div
-              key="settings"
-              initial={{ opacity: 0, x: 16 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 16 }}
-              transition={{ duration: 0.18 }}
-              className="flex min-h-0 flex-1 flex-col"
-            >
-              <div className="flex min-h-0 flex-1 flex-col">
-                <div className="flex flex-col gap-2 p-5 pb-0">
-                  <UiScaleSettings />
-                  <FullscreenSettings />
-                </div>
-                <AiSettings />
-                <DiagnosticsSettings />
-              </div>
             </motion.div>
           ) : null}
         </AnimatePresence>
@@ -776,11 +711,12 @@ export default function Home() {
               </span>
             )}
           </div>
-          <span className="text-xs font-medium">Входящие</span>
+          <span className="text-xs font-medium">Разобрать</span>
         </button>
         <button
           onClick={() => {
             telegram?.haptic.selection();
+            setNavHidden(false);
             setTab("library");
           }}
           className={`relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-1 transition-colors ${
@@ -795,41 +731,27 @@ export default function Home() {
               </span>
             )}
           </div>
-          <span className="text-xs font-medium">Библиотека</span>
-        </button>
-        <button
-          onClick={() => {
-            telegram?.haptic.selection();
-            setTab("archive");
-          }}
-          className={`relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-1 transition-colors ${
-            tab === "archive" ? "text-accent" : "text-muted"
-          }`}
-        >
-          <div className="relative">
-            <Archive className="size-[26px]" />
-            {archived.length > 0 && (
-              <span className="absolute -right-3 -top-1.5 flex min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-accent-text">
-                {archived.length}
-              </span>
-            )}
-          </div>
-          <span className="text-xs font-medium">Архив</span>
+          <span className="text-xs font-medium">Сохранёнки</span>
         </button>
         <button
           onClick={() => {
             telegram?.haptic.selection();
             setNavHidden(false);
-            setTab("settings");
+            setTab("later");
           }}
           className={`relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-1 transition-colors ${
-            tab === "settings" ? "text-accent" : "text-muted"
+            tab === "later" ? "text-accent" : "text-muted"
           }`}
         >
           <div className="relative">
-            <Settings className="size-[26px]" />
+            <Clock className="size-[26px]" />
+            {later.length > 0 && (
+              <span className="absolute -right-3 -top-1.5 flex min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-accent-text">
+                {later.length}
+              </span>
+            )}
           </div>
-          <span className="text-xs font-medium">Настройки</span>
+          <span className="text-xs font-medium">Позже</span>
         </button>
       </motion.nav>
 
@@ -923,6 +845,93 @@ export default function Home() {
                 >
                   Удалить всё
                 </button>
+              </div>
+</motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Settings sheet */}
+      <AnimatePresence>
+        {settingsOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center"
+            onClick={() => setSettingsOpen(false)}
+          >
+            <motion.div
+              initial={{ y: 60, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 60, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="flex max-h-[85dvh] w-full max-w-sm flex-col rounded-t-3xl border border-line bg-surface sm:rounded-3xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-5 pt-4">
+                <h2 className="text-lg font-bold text-text">Настройки</h2>
+                <button
+                  onClick={() => setSettingsOpen(false)}
+                  aria-label="Закрыть"
+                  className="flex size-9 items-center justify-center rounded-full bg-surface text-muted active:scale-90"
+                >
+                  <X className="size-5" />
+                </button>
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto hide-scrollbar">
+                <div className="flex flex-col gap-2 p-5 pb-0">
+                  <UiScaleSettings />
+                  <FullscreenSettings />
+                </div>
+                <div className="flex flex-col gap-2 px-5 py-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
+                    Архив
+                  </h3>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs text-muted">Очистка:</span>
+                    {[
+                      { label: "24ч", hours: 24 },
+                      { label: "7д", hours: 168 },
+                      { label: "30д", hours: 720 },
+                      { label: "Выкл", hours: null },
+                    ].map((opt) => (
+                      <button
+                        key={String(opt.hours)}
+                        onClick={() =>
+                          setTtl(opt.hours, opt.hours ? Date.now() - opt.hours * 60 * 60 * 1000 : null)
+                        }
+                        className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                          archiveTtlHours === opt.hours
+                            ? "bg-accent text-accent-text"
+                            : "bg-surface text-muted hover:text-text"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => {
+                        telegram?.haptic.impact("medium");
+                        setClearConfirmOpen(true);
+                      }}
+                      disabled={archived.length === 0}
+                      className={`ml-auto inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                        archived.length === 0
+                          ? "cursor-not-allowed bg-surface text-muted/40"
+                          : "bg-red-600/20 text-red-400 hover:bg-red-600/30"
+                      }`}
+                    >
+                      <Trash2 className="size-3" />
+                      Очистить
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-muted">
+                    Архивные карточки доступны в «Сохранёнки» → вкладка «Архив».
+                  </p>
+                </div>
+                <AiSettings />
+                <DiagnosticsSettings />
               </div>
             </motion.div>
           </motion.div>

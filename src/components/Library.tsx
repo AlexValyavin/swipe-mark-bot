@@ -435,7 +435,7 @@ export function Library({
 
   const tabs: { key: LibraryTab; label: string }[] = [
     { key: "deck", label: "В колоде" },
-    { key: "later", label: "Открыть позже" },
+    { key: "later", label: "Позже" },
     { key: "archive", label: "Архив" },
   ];
 
@@ -451,7 +451,7 @@ export function Library({
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Header: title + search + filters */}
       <div className="flex items-center gap-2 px-5 py-2">
-        <h1 className="shrink-0 text-lg font-bold text-text">Библиотека</h1>
+        <h1 className="shrink-0 text-lg font-bold text-text">Сохранёнки</h1>
         <div className="flex flex-1 items-center gap-2 rounded-xl bg-surface px-3 py-2">
           <Search className="size-4 text-muted" />
           <input
@@ -545,7 +545,7 @@ export function Library({
           }`}
         >
           <Sparkles className="size-3.5" />
-          <span>Несортированное</span>
+          <span>Неразобранное</span>
           <span className="opacity-60">{unsortedCount}</span>
         </button>
         <button
@@ -578,7 +578,7 @@ export function Library({
             className="flex w-full items-center gap-2 rounded-xl bg-accent/15 px-3 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent/25 active:scale-[0.98]"
           >
             <Sparkles className="size-3.5" />
-            <span>Автосортировать {unsortedCount} карточек</span>
+            <span>Разложить с AI</span>
             <span className="ml-auto opacity-60">→</span>
           </button>
         </div>
@@ -806,7 +806,7 @@ export function Library({
                 : selectedTags.length > 0
                   ? "Нет карточек с этими тегами"
                   : folderId === "unsorted"
-                    ? "Несортированных нет"
+                    ? "Неразобранных нет"
                     : folderId
                       ? "В папке пока пусто"
                       : tab === "archive"
@@ -1565,7 +1565,7 @@ function AutosortSheet({
             <Sparkles className="size-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-text">Автосортировка</h2>
+            <h2 className="text-base font-bold text-text">Разложить с AI</h2>
             <p className="text-xs text-muted">
               {job ? `Карточек в очереди: ${total}` : `Карточек без папки: ${count}`}
             </p>

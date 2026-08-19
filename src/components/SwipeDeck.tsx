@@ -69,14 +69,14 @@ export function SwipeDeck({
         </AnimatePresence>
       </div>
 
-      {/* Счётчик оставшихся в стопке */}
+      {/* Счётчик оставшихся */}
       <div className="pointer-events-none absolute top-3 left-0 right-0 flex justify-center" style={{ zIndex: 30 }}>
         <div className="flex items-baseline gap-1 rounded-full bg-black/50 px-3 py-1 backdrop-blur-sm">
           <span className="text-sm font-bold text-white tabular-nums">
             {bookmarks.length}
           </span>
           <span className="text-[10px] uppercase tracking-wide text-white/70">
-            в стопке
+            осталось
           </span>
         </div>
       </div>
