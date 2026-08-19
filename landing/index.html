@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SwipeMark — разгреби свои сохранёнки</title>
+    <meta
+      name="description"
+      content="Отправляй ссылки в Telegram, а SwipeMark поможет быстро разобрать их с помощью свайпов и AI."
+    />
+    <meta property="og:title" content="SwipeMark — разгреби свои сохранёнки" />
+    <meta
+      property="og:description"
+      content="Отправляй ссылки в Telegram, а SwipeMark поможет быстро разобрать их с помощью свайпов и AI."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <nav class="nav">
+      <div class="nav-inner">
+        <a href="#top" class="brand">
+          <span class="brand-logo">⚡</span>
+          <span class="brand-name">SwipeMark</span>
+        </a>
+        <a class="nav-cta" href="https://t.me/SwipeMarkBot/app" target="_blank" rel="noopener noreferrer">
+          Открыть в Telegram →
+        </a>
+      </div>
+    </nav>
+
+    <main id="top">
+      <!-- Hero -->
+      <section class="hero">
+        <div class="hero-glow"></div>
+        <div class="container hero-inner">
+          <span class="badge">Telegram Mini App · PWA</span>
+          <h1>Разгреби свои <span class="accent">сохранёнки</span></h1>
+          <p class="hero-sub">
+            Отправляй ссылки в Telegram, а SwipeMark поможет быстро разобрать их
+            с помощью свайпов и AI.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="https://t.me/SwipeMarkBot/app" target="_blank" rel="noopener noreferrer">
+              Открыть бота
+            </a>
+            <a class="btn btn-ghost" href="#how">Как это работает ↓</a>
+          </div>
+          <p class="hero-meta">Сохранить → понять → решить</p>
+        </div>
+      </section>
+
+      <!-- Problem -->
+      <section class="problem">
+        <div class="container">
+          <h2>Ты сохраняешь всё. Потом ничего не находишь.</h2>
+          <div class="problem-cards">
+            <div class="card">
+              <span class="card-emoji">📥</span>
+              <p>«Посмотреть потом», «сохранить на всякий случай», «это надо прочитать».</p>
+            </div>
+            <div class="card">
+              <span class="card-emoji">🗂</span>
+              <p>Через год — 800 сохранённых сообщений, и ты уже ничего не помнишь.</p>
+            </div>
+            <div class="card">
+              <span class="card-emoji">🥱</span>
+              <p>Разгребать вручную по папкам — монотонная работа, на которую не хватает сил.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- How it works -->
+      <section id="how" class="how">
+        <div class="container">
+          <h2>Свайпай — как в карточной колоде</h2>
+          <p class="section-sub">Колода карточек. Одно решение — один свайп.</p>
+          <div class="how-grid">
+            <div class="step">
+              <div class="step-num">1</div>
+              <h3>Сохраняй</h3>
+              <p>Ссылка, фото или видео боту — карточка готова сама: заголовок, превью, источник.</p>
+            </div>
+            <div class="step">
+              <div class="step-num">2</div>
+              <h3>Разбирай</h3>
+              <p>Влево — в архив, вправо — потом, вверх — открыть. Прогресс-бар над колодой держит в тонусе.</p>
+            </div>
+            <div class="step">
+              <div class="step-num">3</div>
+              <h3>Решай</h3>
+              <p>AI подскажет папку и теги, перескажет «Кратко» — и ты освобождаешь голову.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screenshots -->
+      <section id="screens" class="screens">
+        <div class="container">
+          <h2>Вот как это выглядит</h2>
+          <div class="screens-grid">
+            <figure class="screen">
+              <div class="screen-frame">
+                <img src="./screenshots/deck.png" alt="Колода карточек с прогрессом разбора" loading="lazy" />
+              </div>
+              <figcaption>Колода: свайпай и разбирай</figcaption>
+            </figure>
+            <figure class="screen">
+              <div class="screen-frame">
+                <img src="./screenshots/card.png" alt="Карточка с кратким пересказом AI" loading="lazy" />
+              </div>
+              <figcaption>Карточка: заголовок, «Кратко», теги</figcaption>
+            </figure>
+            <figure class="screen">
+              <div class="screen-frame">
+                <img src="./screenshots/completion.png" alt="Экран завершения с итогами сессии" loading="lazy" />
+              </div>
+              <figcaption>Итоги сессии: оставил / потом / архив</figcaption>
+            </figure>
+            <figure class="screen">
+              <div class="screen-frame">
+                <img src="./screenshots/library.png" alt="Мои сохранёнки: папки, теги, поиск" loading="lazy" />
+              </div>
+              <figcaption>Мои сохранёнки: папки, теги, поиск</figcaption>
+            </figure>
+            <figure class="screen">
+              <div class="screen-frame">
+                <img src="./screenshots/onboarding.png" alt="Онбординг при первом входе" loading="lazy" />
+              </div>
+              <figcaption>Онбординг: «Разгреби свои сохранёнки»</figcaption>
+            </figure>
+            <figure class="screen">
+              <div class="screen-frame">
+                <img src="./screenshots/empty.png" alt="Пустая колода с кнопкой открыть бота" loading="lazy" />
+              </div>
+              <figcaption>Пустая колода — пора сохранить что-нибудь</figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <!-- AI -->
+      <section class="ai">
+        <div class="container">
+          <div class="ai-card">
+            <span class="ai-emoji">✨</span>
+            <h2>AI помогает решить, что делать с ссылкой</h2>
+            <p>
+              Не «у нас есть AI», а AI, который перескажет, предложит папку и теги —
+              чтобы решение принималось за один свайп.
+            </p>
+            <div class="ai-features">
+              <span>📖 Кратко по запросу</span>
+              <span>📁 Предложение папки</span>
+              <span>🏷 Теги за один приём</span>
+              <span>⚡ Разложить всё сразу</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CTA -->
+      <section class="cta">
+        <div class="container">
+          <h2>Готов начать разгребать?</h2>
+          <p>Открой бота в Telegram — первая карточка появится через минуту.</p>
+          <a class="btn btn-primary btn-lg" href="https://t.me/SwipeMarkBot/app" target="_blank" rel="noopener noreferrer">
+            Открыть @SwipeMarkBot
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container footer-inner">
+        <span>⚡ SwipeMark — разгреби свои сохранёнки</span>
+        <a href="https://github.com/AlexValyavin/swipe-mark-bot" target="_blank" rel="noopener noreferrer">
+          GitHub
+        </a>
+      </div>
+    </footer>
+  </body>
+</html>
