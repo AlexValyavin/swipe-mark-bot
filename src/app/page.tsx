@@ -77,6 +77,9 @@ export default function Home() {
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [navHidden, setNavHidden] = useState(false);
   const swipedOnce = useRef(false);
+  const [sessionDone, setSessionDone] = useState(0);
+  const [sessionArchived, setSessionArchived] = useState(0);
+  const [sessionLater, setSessionLater] = useState(0);
 
   const isMiniApp = !!twa;
   const user = twa?.initDataUnsafe?.user;
@@ -177,6 +180,8 @@ export default function Home() {
       telegram?.haptic.impact("medium");
       setDeck((prev) => prev.filter((b) => b.id !== bookmark.id));
       setArchived((prev) => [...prev, bookmark]);
+      setSessionDone((n) => n + 1);
+      setSessionArchived((n) => n + 1);
       showUndoToast(bookmark);
       const res = await postAction(bookmark.id, "left");
       if (!res) loadBookmarks();
@@ -187,6 +192,8 @@ export default function Home() {
       telegram?.haptic.impact("light");
       setDeck((prev) => prev.filter((b) => b.id !== bookmark.id));
       setLater((prev) => [bookmark, ...prev.filter((b) => b.id !== bookmark.id)]);
+      setSessionDone((n) => n + 1);
+      setSessionLater((n) => n + 1);
       showUndoToast(bookmark, "Отложено");
       const res = await postAction(bookmark.id, "right");
       if (!res) loadBookmarks();
@@ -326,6 +333,9 @@ export default function Home() {
 
   const refresh = () => {
     setLoading(true);
+    setSessionDone(0);
+    setSessionArchived(0);
+    setSessionLater(0);
     loadCounts();
     loadBookmarks()
       .catch((e) => setError(e instanceof Error ? e.message : "Ошибка загрузки"))
@@ -541,29 +551,62 @@ export default function Home() {
                 )
               ) : deck.length > 0 ? (
                 <div className="flex flex-1 min-h-0 items-center justify-center px-4 pb-2 md:max-h-[min(820px,calc(100dvh-140px))]">
-                  <SwipeDeck bookmarks={deck} onSwipe={handleSwipe} onOpen={openBookmark} onRetry={retryBookmark} />
+                  <SwipeDeck bookmarks={deck} onSwipe={handleSwipe} onOpen={openBookmark} onRetry={retryBookmark} done={sessionDone} />
                 </div>
               ) : bookmarks.length > 0 ? (
-                <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+                <div className="flex flex-1 flex-col items-center justify-center gap-5 p-8 text-center">
                   <motion.div
-                    initial={{ scale: 0.7, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ type: "spring", stiffness: 200, damping: 15 }}
-                    className="text-6xl"
+                    initial={{ scale: 0.5, opacity: 0, rotate: -8 }}
+                    animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                    transition={{ type: "spring", stiffness: 180, damping: 14 }}
+                    className="text-7xl"
                   >
                     🎉
                   </motion.div>
-                  <p className="text-lg font-medium text-text">Всё разобрано!</p>
-                  <p className="text-sm text-muted">
-                    {archived.length} сохранений в архиве
-                  </p>
-                  <button
-                    onClick={refresh}
-                    className="mt-2 inline-flex items-center gap-2 rounded-full bg-surface px-6 py-2 text-sm text-text hover:bg-line transition-colors"
-                  >
-                    <RefreshCw className="size-3.5" />
-                    Обновить
-                  </button>
+                  <div>
+                    <p className="text-xl font-bold text-text">
+                      Готово! Ты разобрал {sessionDone} сохранений.
+                    </p>
+                    <p className="mt-1 text-sm text-muted">Колода пуста — молодец.</p>
+                  </div>
+                  {(sessionArchived > 0 || sessionLater > 0) && (
+                    <div className="flex w-full max-w-[280px] flex-col gap-2">
+                      {sessionLater > 0 && (
+                        <div className="flex items-center justify-between rounded-xl bg-surface px-4 py-2.5">
+                          <span className="text-sm text-muted">Позже</span>
+                          <span className="font-bold tabular-nums text-success">
+                            {sessionLater}
+                          </span>
+                        </div>
+                      )}
+                      {sessionArchived > 0 && (
+                        <div className="flex items-center justify-between rounded-xl bg-surface px-4 py-2.5">
+                          <span className="text-sm text-muted">В архив</span>
+                          <span className="font-bold tabular-nums text-danger">
+                            {sessionArchived}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className="mt-1 flex flex-col gap-2.5">
+                    <button
+                      onClick={() => {
+                        telegram?.haptic.selection();
+                        setTab("library");
+                      }}
+                      className="inline-flex items-center justify-center gap-2 rounded-full bg-accent px-8 py-2.5 text-sm font-semibold text-accent-text shadow-lg shadow-accent/30 transition-transform active:scale-95"
+                    >
+                      Посмотреть сохранёнки
+                    </button>
+                    <button
+                      onClick={refresh}
+                      className="inline-flex items-center justify-center gap-2 rounded-full bg-surface px-8 py-2.5 text-sm text-text hover:bg-line transition-colors"
+                    >
+                      <RefreshCw className="size-3.5" />
+                      Проверить новые
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">

@@ -12,11 +12,13 @@ export function SwipeDeck({
   onSwipe,
   onOpen,
   onRetry,
+  done,
 }: {
   bookmarks: Bookmark[];
   onSwipe: (direction: SwipeDirection, bookmark: Bookmark) => void;
   onOpen: (bookmark: Bookmark) => void;
   onRetry?: (bookmark: Bookmark) => void;
+  done?: number;
 }) {
   const [exitX, setExitX] = useState(500);
   const [exitY, setExitY] = useState(0);
@@ -25,6 +27,8 @@ export function SwipeDeck({
   if (bookmarks.length === 0) return null;
 
   const current = bookmarks[0];
+  const total = (done ?? 0) + bookmarks.length;
+  const pct = total > 0 ? Math.min(100, Math.round(((done ?? 0) / total) * 100)) : 0;
 
   const handleSwipe = (direction: SwipeDirection) => {
     setExitX(direction === "left" ? -500 : direction === "up" ? 0 : 500);
@@ -69,15 +73,26 @@ export function SwipeDeck({
         </AnimatePresence>
       </div>
 
-      {/* Счётчик оставшихся */}
-      <div className="pointer-events-none absolute top-3 left-0 right-0 flex justify-center" style={{ zIndex: 30 }}>
-        <div className="flex items-baseline gap-1 rounded-full bg-black/50 px-3 py-1 backdrop-blur-sm">
-          <span className="text-sm font-bold text-white tabular-nums">
-            {bookmarks.length}
-          </span>
-          <span className="text-[10px] uppercase tracking-wide text-white/70">
-            осталось
-          </span>
+      {/* Прогресс разбора */}
+      <div className="pointer-events-none absolute top-3 left-0 right-0 flex justify-center px-4" style={{ zIndex: 30 }}>
+        <div className="w-full max-w-[300px] rounded-xl bg-black/50 px-3 py-2 backdrop-blur-sm">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-[10px] uppercase tracking-wide text-white/70">
+              {done !== undefined ? `${done} / ${total} разобрано` : "осталось"}
+            </span>
+            <span className="text-sm font-bold text-white tabular-nums">
+              {bookmarks.length}
+            </span>
+          </div>
+          {done !== undefined && (
+            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/20">
+              <motion.div
+                className="h-full rounded-full bg-emerald-400"
+                animate={{ width: `${pct}%` }}
+                transition={{ type: "spring", stiffness: 200, damping: 30 }}
+              />
+            </div>
+          )}
         </div>
       </div>
 
