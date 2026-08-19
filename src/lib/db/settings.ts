@@ -46,6 +46,43 @@ export async function setUiScale(userId: string, scale: UiScale): Promise<void> 
   }
 }
 
+export async function getOnboarded(userId: string): Promise<boolean> {
+  const { data } = await getAdminDb()
+    .from("user_settings")
+    .select("onboarded")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return data?.onboarded === true;
+}
+
+export async function setOnboarded(userId: string, onboarded: boolean): Promise<void> {
+  const now = new Date().toISOString();
+  const existing = await getAdminDb()
+    .from("user_settings")
+    .select("user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existing.data) {
+    const { error } = await getAdminDb()
+      .from("user_settings")
+      .update({ onboarded, updated_at: now })
+      .eq("user_id", userId);
+    if (error) throw error;
+  } else {
+    const { error } = await getAdminDb()
+      .from("user_settings")
+      .insert({
+        user_id: userId,
+        ai_mode: "off",
+        archive_ttl_hours: null,
+        onboarded,
+        updated_at: now,
+      });
+    if (error) throw error;
+  }
+}
+
 export type AiSettings = {
   provider: string | null;
   ai_key_enc: string | null;

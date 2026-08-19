@@ -55,6 +55,7 @@ export default function Home() {
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
   const [librarySignal, setLibrarySignal] = useState(0);
   const [counts, setCounts] = useState<{
     inDeck: number;
@@ -96,6 +97,9 @@ export default function Home() {
       }
       if (data.uiScale === "s" || data.uiScale === "l") {
         document.documentElement.setAttribute("data-ui-scale", data.uiScale);
+      }
+      if (data.onboarded !== undefined) {
+        setOnboarded(data.onboarded === true);
       }
     } catch {
       // настройки не критичны — молча пропускаем
@@ -260,6 +264,20 @@ export default function Home() {
     setFolderDeck(null);
     setFolderDeckCards([]);
     refresh();
+  };
+
+  const finishOnboarding = async () => {
+    telegram?.haptic.impact("medium");
+    setOnboarded(true);
+    try {
+      await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ onboarded: true }),
+      });
+    } catch {
+      // даже если не сохранится — не блокируем пользователя
+    }
   };
 
   const returnToDeck = (bookmark: Bookmark) => {
@@ -980,6 +998,83 @@ export default function Home() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Онбординг */}
+      {!loading && onboarded === false && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-bg sm:items-center"
+        >
+          <motion.div
+            initial={{ y: 40, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ type: "spring", stiffness: 200, damping: 24 }}
+            className="w-full max-w-sm px-6 pb-8 sm:pb-6"
+          >
+            <div className="flex flex-col items-center text-center">
+              <motion.div
+                initial={{ scale: 0.6, opacity: 0, rotate: -10 }}
+                animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                transition={{ type: "spring", stiffness: 180, damping: 14, delay: 0.1 }}
+                className="flex size-20 items-center justify-center rounded-3xl bg-gradient-to-br from-indigo-500 to-purple-600 text-4xl shadow-2xl shadow-purple-500/30"
+              >
+                ⚡
+              </motion.div>
+              <h1 className="mt-5 text-2xl font-bold tracking-tight text-text">
+                Добро пожаловать в SwipeMark
+              </h1>
+              <p className="mt-2 text-sm text-muted">
+                Здесь соберутся ссылки, видео и сообщения, которые ты сохранял боту — и ты разберёшь их за пару минут.
+              </p>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-2.5">
+              <div className="flex items-center gap-3 rounded-xl bg-surface p-3.5">
+                <span className="flex size-9 flex-shrink-0 items-center justify-center rounded-xl bg-accent/15 text-lg">
+                  📩
+                </span>
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-text">Отправляй боту</p>
+                  <p className="text-xs text-muted">
+                    Ссылки, видео и сообщения — всё попадёт в колоду.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl bg-surface p-3.5">
+                <span className="flex size-9 flex-shrink-0 items-center justify-center rounded-xl bg-success/15 text-lg">
+                  👉
+                </span>
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-text">Разбирай свайпами</p>
+                  <p className="text-xs text-muted">
+                    ← архив · → потом · ↑ открыть.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl bg-surface p-3.5">
+                <span className="flex size-9 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-500/15 text-lg">
+                  ✨
+                </span>
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-text">AI поможет</p>
+                  <p className="text-xs text-muted">
+                    Сам определит тему и разложит по папкам.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={finishOnboarding}
+              className="mt-6 w-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 py-3.5 text-base font-semibold text-white shadow-lg shadow-purple-500/30 transition-transform active:scale-[0.98]"
+            >
+              Начать
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
     </div>
   );
 }

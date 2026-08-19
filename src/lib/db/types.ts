@@ -19,6 +19,7 @@ export interface UserSettingsRow {
   ai_mode: string;
   archive_ttl_hours: number | null;
   ui_scale: string;
+  onboarded: boolean;
   updated_at: string;
 }
 

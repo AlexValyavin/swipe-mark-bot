@@ -5,6 +5,8 @@ import {
   setArchiveTtl,
   getUiScale,
   setUiScale,
+  getOnboarded,
+  setOnboarded,
   isUiScale,
 } from "@/lib/db/settings";
 
@@ -19,12 +21,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const [archiveTtlHours, uiScale] = await Promise.all([
+    const [archiveTtlHours, uiScale, onboarded] = await Promise.all([
       getArchiveTtl(userId),
       getUiScale(userId),
+      getOnboarded(userId),
     ]);
 
-    return NextResponse.json({ archiveTtlHours, uiScale });
+    return NextResponse.json({ archiveTtlHours, uiScale, onboarded });
   } catch (e) {
     console.error("Settings error:", e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
@@ -41,6 +44,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as {
       archiveTtlHours?: number | null;
       uiScale?: string;
+      onboarded?: boolean;
     };
     const ttl = body.archiveTtlHours ?? null;
 
@@ -57,10 +61,15 @@ export async function POST(req: NextRequest) {
       await setUiScale(userId, body.uiScale);
     }
 
+    if (body.onboarded !== undefined) {
+      await setOnboarded(userId, body.onboarded === true);
+    }
+
     return NextResponse.json({
       ok: true,
       archiveTtlHours: ttl,
       uiScale: body.uiScale ?? (await getUiScale(userId)),
+      onboarded: body.onboarded ?? (await getOnboarded(userId)),
     });
   } catch (e) {
     console.error("Settings error:", e);
