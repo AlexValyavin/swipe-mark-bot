@@ -107,6 +107,18 @@ async function resolveAiContext(userId: string): Promise<{
   model: string;
   baseUrl?: string;
 } | null> {
+  // Глобальный ключ владельца (env) — основной источник для всех пользователей.
+  const globalKey = process.env.OPENROUTER_API_KEY?.trim();
+  if (globalKey) {
+    return {
+      mode: "auto",
+      provider: "openrouter",
+      apiKey: globalKey,
+      model: process.env.AI_MODEL?.trim() || "deepseek/deepseek-v4-flash-0731",
+    };
+  }
+
+  // Fallback: BYOK-настройки пользователя (для локальной разработки).
   const s = await getAiSettings(userId);
   if (!s) return null;
   const mode = (s.ai_mode as EnrichMode) ?? "off";
@@ -199,9 +211,10 @@ export async function enrichCard(userId: string, cardId: string): Promise<Enrich
     return { status: "failed", reason };
   }
 
-  // Папка: применяем только в режиме auto при confidence >= 0.7, иначе suggestion.
+  // Папка: только подсказка (ai_folder_id) — применяется вручную через ai-accept.
+  // Авто-перемещение отключено: теги добавляются автоматически, папка не трогается.
   let aiFolderId: string | null = null;
-  let applied = false;
+  const applied = false;
   if (suggestion.folder) {
     try {
       // Модель может вернуть "💼 win" (эмодзи из промпта) — нормализуем к чистому имени.
@@ -209,10 +222,6 @@ export async function enrichCard(userId: string, cardId: string): Promise<Enrich
       const folder = await getFolderByName(userId, folderName);
       if (folder) {
         aiFolderId = folder.id;
-        if (ctx.mode === "auto" && suggestion.confidence >= 0.7) {
-          await addCardToFolder(cardId, folder.id);
-          applied = true;
-        }
       }
       // Папки нет — не создаём (по ТЗ «авто-создание запрещено»), suggestion не пишем.
     } catch (e) {

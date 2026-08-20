@@ -22,13 +22,61 @@ import type { SwipeDirection } from "@/components/BookmarkCard";
 import { getOpenTarget } from "@/lib/openTarget";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 import { Library } from "@/components/Library";
-import { AiSettings } from "@/components/AiSettings";
+import { PairingSettings } from "@/components/PairingSettings";
 import { DiagnosticsSettings } from "@/components/DiagnosticsSettings";
 import { AddModal, AddButton } from "@/components/AddModal";
 import { UiScaleSettings } from "@/components/UiScaleSettings";
 import { FullscreenSettings } from "@/components/FullscreenSettings";
 
 type Tab = "inbox" | "library" | "later";
+
+// --- Клиентский кэш (stale-while-revalidate) ---
+const CACHE_KEY = "swipe-cache-v1";
+
+type ClientCache = {
+  bookmarks?: Bookmark[];
+  counts?: { inDeck: number; readLater: number; archived: number; unsorted: number } | null;
+  lang?: string;
+  uiScale?: string;
+  onboarded?: boolean;
+  archiveTtlHours?: number | null;
+};
+
+function readCache(): ClientCache {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(window.localStorage.getItem(CACHE_KEY) || "{}") as ClientCache;
+  } catch {
+    return {};
+  }
+}
+
+function writeCache(patch: Partial<ClientCache>): void {
+  if (typeof window === "undefined") return;
+  try {
+    const cur = readCache();
+    window.localStorage.setItem(CACHE_KEY, JSON.stringify({ ...cur, ...patch }));
+  } catch {}
+}
+
+// Раскладка карточек по колодам (используется и при загрузке, и при гидрации из кэша).
+function computeLists(all: Bookmark[]) {
+  const now = Date.now();
+  return {
+    deck: all.filter((b) => {
+      const s = b.status || "new";
+      if (s === "new") return true;
+      if (s === "later" && b.deferUntil && new Date(b.deferUntil).getTime() <= now) return true;
+      return false;
+    }),
+    later: all.filter((b) => {
+      const s = b.status || "new";
+      if (s !== "later") return false;
+      return !b.deferUntil || new Date(b.deferUntil).getTime() > now;
+    }),
+    archived: all.filter((b) => (b.status || "new") === "archived"),
+  };
+}
 
 function typeEmoji(c: Bookmark): string {
   if (c.type === "photo") return "📷";
@@ -47,25 +95,34 @@ export default function Home() {
   const { t, tp, lang, setLang } = useI18n();
   const twa = telegram?.app ?? null;
   const [userId, setUserId] = useState<string | null>(null);
-  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
-  const [deck, setDeck] = useState<Bookmark[]>([]);
-  const [archived, setArchived] = useState<Bookmark[]>([]);
-  const [later, setLater] = useState<Bookmark[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>(() => readCache().bookmarks ?? []);
+  const initialLists = useRef(computeLists(readCache().bookmarks ?? [])).current;
+  const [deck, setDeck] = useState<Bookmark[]>(initialLists.deck);
+  const [archived, setArchived] = useState<Bookmark[]>(initialLists.archived);
+  const [later, setLater] = useState<Bookmark[]>(initialLists.later);
+  const [loading, setLoading] = useState<boolean>(() => {
+    const c = readCache();
+    return typeof c.bookmarks !== "undefined" ? false : true;
+  });
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("inbox");
-  const [archiveTtlHours, setArchiveTtlHours] = useState<number | null>(null);
+  const [archiveTtlHours, setArchiveTtlHours] = useState<number | null>(
+    () => readCache().archiveTtlHours ?? null
+  );
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [onboarded, setOnboarded] = useState<boolean | null>(null);
+  const [onboarded, setOnboarded] = useState<boolean | null>(() => {
+    const c = readCache();
+    return typeof c.onboarded === "boolean" ? c.onboarded : null;
+  });
   const [librarySignal, setLibrarySignal] = useState(0);
   const [counts, setCounts] = useState<{
     inDeck: number;
     readLater: number;
     archived: number;
     unsorted: number;
-  } | null>(null);
+  } | null>(() => readCache().counts ?? null);
   const [folderDeck, setFolderDeck] = useState<{
     folderId: string;
     folderName: string;
@@ -80,6 +137,7 @@ export default function Home() {
   const [undoLabel, setUndoLabel] = useState(t("undo.action.archive"));
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [navHidden, setNavHidden] = useState(false);
+  const [twaTimeoutPassed, setTwaTimeoutPassed] = useState(false);
   const swipedOnce = useRef(false);
   const [sessionDone, setSessionDone] = useState(0);
   const [sessionArchived, setSessionArchived] = useState(0);
@@ -98,6 +156,7 @@ export default function Home() {
     try {
       const res = await fetch("/api/settings");
       const data = await res.json();
+      if (data.error) return;
       if (data.archiveTtlHours !== undefined) {
         setArchiveTtlHours(
           typeof data.archiveTtlHours === "number" ? data.archiveTtlHours : null
@@ -112,6 +171,13 @@ export default function Home() {
       if (data.onboarded !== undefined) {
         setOnboarded(data.onboarded === true);
       }
+      writeCache({
+        archiveTtlHours:
+          typeof data.archiveTtlHours === "number" ? data.archiveTtlHours : null,
+        uiScale: data.uiScale === "s" || data.uiScale === "l" ? data.uiScale : undefined,
+        lang: data.lang === "ru" || data.lang === "en" ? data.lang : undefined,
+        onboarded: data.onboarded === true ? true : undefined,
+      });
     } catch {
       // настройки не критичны — молча пропускаем
     }
@@ -123,6 +189,7 @@ export default function Home() {
       if (!res.ok) return;
       const data = await res.json();
       setCounts(data);
+      writeCache({ counts: data });
     } catch {
       // бейджи не критичны
     }
@@ -135,27 +202,13 @@ export default function Home() {
       throw new Error(data.error);
     }
 
-    const now = Date.now();
     const all: Bookmark[] = data.bookmarks || [];
     setBookmarks(all);
-    setDeck(
-      all.filter((b) => {
-        const s = b.status || "new";
-        if (s === "new") return true;
-        if (s === "later" && b.deferUntil && new Date(b.deferUntil).getTime() <= now) {
-          return true;
-        }
-        return false;
-      })
-    );
-    setLater(
-      all.filter((b) => {
-        const s = b.status || "new";
-        if (s !== "later") return false;
-        return !b.deferUntil || new Date(b.deferUntil).getTime() > now;
-      })
-    );
-    setArchived(all.filter((b) => (b.status || "new") === "archived"));
+    const lists = computeLists(all);
+    setDeck(lists.deck);
+    setLater(lists.later);
+    setArchived(lists.archived);
+    writeCache({ bookmarks: all });
   };
 
   const postAction = async (cardId: string, action: string) => {
@@ -281,6 +334,7 @@ export default function Home() {
   const finishOnboarding = async () => {
     telegram?.haptic.impact("medium");
     setOnboarded(true);
+    writeCache({ onboarded: true });
     trackClient("onboarding_completed");
     try {
       await fetch("/api/settings", {
@@ -320,6 +374,7 @@ export default function Home() {
   const setTtl = (hours: number | null, cutoff: number | null) => {
     telegram?.haptic.selection();
     setArchiveTtlHours(hours);
+    writeCache({ archiveTtlHours: hours });
     if (cutoff) {
       setArchived((prev) =>
         prev.filter((c) => new Date(c.createdAt).getTime() >= cutoff)
@@ -381,6 +436,11 @@ export default function Home() {
     };
   }, []);
 
+  useEffect(() => {
+    const t = setTimeout(() => setTwaTimeoutPassed(true), 1500);
+    return () => clearTimeout(t);
+  }, []);
+
   // Онбординг показан.
   useEffect(() => {
     if (onboarded === false) {
@@ -437,27 +497,56 @@ export default function Home() {
     setUserId(uid);
 
     (async () => {
-      try {
+      // Авторизация запускается параллельно с данными: на повторном входе
+      // сессионная cookie уже есть, и данные приходят без ожидания auth.
+      const authPromise = (async () => {
         const authRes = await fetch("/api/auth", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ initData }),
         });
-        if (!authRes.ok) {
-          throw new Error(t("app.error.auth"));
-        }
+        if (!authRes.ok) throw new Error(t("app.error.auth"));
         const authData = (await authRes.json()) as { uid?: string };
         initClientAnalytics(authData.uid);
+        return authData.uid;
+      })();
+
+      const loadOnce = async () => {
         await Promise.all([loadSettings(), loadBookmarks(), loadCounts()]);
+      };
+
+      try {
+        // Первый проход: cookie обычно есть у вернувшихся пользователей.
+        await loadOnce();
+        // Данные пришли — auth догоняет в фоне (для аналитики).
+        authPromise.catch(() => {});
       } catch (e) {
-        setError(e instanceof Error ? e.message : t("app.error.load"));
-      } finally {
-        setLoading(false);
+        // Возможная причина — нет cookie (первый вход / WebView сбросил её).
+        // Ждём auth, он выставит cookie, и повторяем загрузку.
+        await authPromise.catch(() => {
+          throw e;
+        });
+        await loadOnce();
       }
-    })();
+    })().catch((e) => {
+      setError(e instanceof Error ? e.message : t("app.error.load"));
+    }).finally(() => {
+      setLoading(false);
+    });
   }, [initData, user?.id]);
 
   if (!isMiniApp) {
+    // Пока Telegram WebApp не инициализирован — спиннер, а не фолбэк.
+    // Это убирает флеш экрана «Открыть в Telegram» при каждом входе.
+    if (!twaTimeoutPassed) {
+      return (
+        <div className="flex min-h-dvh items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="size-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-6 p-8 text-center">
         <div className="flex size-24 items-center justify-center rounded-3xl bg-gradient-to-br from-indigo-500 to-purple-600 text-4xl shadow-2xl">
@@ -1000,6 +1089,7 @@ export default function Home() {
                           telegram?.haptic.selection();
                           setLang(code);
                           syncLang(code);
+                          writeCache({ lang: code });
                         }}
                         className={`rounded-full px-3 py-1 text-xs font-semibold uppercase transition-colors ${
                           lang === code
@@ -1059,7 +1149,7 @@ export default function Home() {
                   </p>
                 </div>
                 <div className="px-5 pb-5 pt-1">
-                  <AiSettings />
+                  <PairingSettings />
                 </div>
                 <div className="px-5 pb-5">
                   <DiagnosticsSettings />

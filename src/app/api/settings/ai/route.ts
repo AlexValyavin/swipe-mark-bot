@@ -28,6 +28,20 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Глобальный AI-ключ владельца (env) — основной источник.
+    // Показываем клиенту как доступный (кнопка «Саммари» видна всем).
+    const globalKey = process.env.OPENROUTER_API_KEY?.trim();
+    if (globalKey) {
+      return NextResponse.json({
+        provider: "openrouter",
+        model: process.env.AI_MODEL?.trim() || "deepseek/deepseek-v4-flash-0731",
+        mode: "auto",
+        hasKey: true,
+        keyMask: null,
+        customBaseUrl: null,
+      });
+    }
+
     const s = await getAiSettings(userId);
     const provider = (s?.provider as AiProvider) ?? "openrouter";
 

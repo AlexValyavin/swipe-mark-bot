@@ -259,7 +259,7 @@ export function BookmarkCard({
       </div>
 
       {/* Info Area */}
-      <div className="flex-shrink-0 p-5">
+      <div className="flex-shrink-0 flex flex-col p-5 max-h-[55%] overflow-y-auto hide-scrollbar">
         <h2 className="text-fs-title font-semibold leading-snug text-text line-clamp-3">
           {bookmark.title || t("card.noTitle")}
         </h2>
@@ -269,7 +269,7 @@ export function BookmarkCard({
               e.stopPropagation();
               setSheetOpen(true);
             }}
-            className="mt-1.5 block w-full text-left text-fs-summary text-muted line-clamp-2"
+            className="mt-1.5 block w-full text-left text-fs-summary text-muted"
           >
             <span className="font-semibold text-text">{t("card.briefPrefix")}</span>
             {summaryText}
@@ -281,16 +281,14 @@ export function BookmarkCard({
               e.stopPropagation();
               setSheetOpen(true);
             }}
-            className="mt-1.5 block w-full text-left text-fs-summary text-muted line-clamp-2"
+            className="mt-1.5 block w-full text-left text-fs-summary text-muted"
           >
             <span className="font-semibold text-text">{t("card.briefPrefix")}</span>
             {bookmark.aiSummary}
           </button>
         )}
         {bookmark.description && !bookmark.aiSummary && (
-          <p className="mt-1.5 text-fs-summary text-muted line-clamp-3">
-            {bookmark.description}
-          </p>
+          <p className="mt-1.5 text-fs-summary text-muted">{bookmark.description}</p>
         )}
         {bookmark.aiFolderName && bookmark.aiStatus === "done" && (
           <div className="mt-2 inline-flex items-center gap-1 rounded-lg bg-accent/15 px-2 py-1 text-xs font-medium text-accent">
