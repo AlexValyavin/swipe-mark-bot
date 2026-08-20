@@ -30,14 +30,23 @@ const commands = [
   { command: "unlink", description: "Отвязать Telegram от аккаунта" },
 ];
 
-const res = await fetch(
-  `https://api.telegram.org/bot${token}/setMyCommands`,
-  {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ commands }),
-  }
-);
-const data = await res.json();
-console.log(data.ok ? "OK: меню команд установлено" : `FAIL: ${JSON.stringify(data)}`);
-if (!data.ok) process.exitCode = 1;
+async function main() {
+  const res = await fetch(
+    `https://api.telegram.org/bot${token}/setMyCommands`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ commands }),
+    }
+  );
+  const data = await res.json();
+  console.log(
+    data.ok ? "OK: меню команд установлено" : `FAIL: ${JSON.stringify(data)}`
+  );
+  if (!data.ok) process.exitCode = 1;
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
