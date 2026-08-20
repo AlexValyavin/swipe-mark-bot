@@ -5,6 +5,7 @@ import {
   countCardsForUser,
   createCard,
   findCardIdByMediaGroup,
+  getCountsForUser,
   updateCard,
   type AttachmentInput,
 } from "@/lib/db/cards";
@@ -65,6 +66,65 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  type InlineButton = { text: string; url?: string; callback_data?: string };
+
+  const sendMessage = async (
+    toChatId: number,
+    text: string,
+    buttons?: InlineButton[][]
+  ) => {
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    if (!token) return;
+    try {
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: toChatId,
+          text,
+          ...(buttons && buttons.length > 0
+            ? { reply_markup: { inline_keyboard: buttons } }
+            : {}),
+        }),
+      });
+    } catch (e) {
+      console.error("Reply error:", e);
+    }
+  };
+
+  // Кнопки стартового меню (callback).
+  const callbackQuery = body.callback_query as
+    | {
+        id?: string;
+        data?: string;
+        message?: { chat?: { id?: number } };
+      }
+    | undefined;
+  if (callbackQuery?.id && callbackQuery.data) {
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    if (token) {
+      void fetch(
+        `https://api.telegram.org/bot${token}/answerCallbackQuery`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            callback_query_id: callbackQuery.id,
+          }),
+        }
+      ).catch(() => {});
+    }
+    const cbChatId = callbackQuery.message?.chat?.id;
+    if (cbChatId) {
+      if (callbackQuery.data === "how") {
+        await sendMessage(cbChatId, HOW_TO_TEXT);
+      } else if (callbackQuery.data === "help") {
+        await sendMessage(cbChatId, HELP_TEXT);
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   const message = body.message as TelegramMessage | undefined;
   if (!message || !message.chat?.id) {
     return NextResponse.json({ ok: true });
@@ -75,19 +135,8 @@ export async function POST(req: NextRequest) {
 
   const chatId = message.chat.id;
 
-  const reply = async (text: string) => {
-    const token = process.env.TELEGRAM_BOT_TOKEN;
-    if (!token) return;
-    try {
-      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, text }),
-      });
-    } catch (e) {
-      console.error("Reply error:", e);
-    }
-  };
+  const reply = (text: string, buttons?: InlineButton[][]) =>
+    sendMessage(chatId, text, buttons);
 
   try {
     const text0 = (message.text || "").trim();
@@ -96,6 +145,20 @@ export async function POST(req: NextRequest) {
     const startMatch = text0.match(/^\/start(?:\s+([A-Z0-9]{8}))?$/i);
     if (startMatch) {
       await handleStart(fromId, startMatch[1] ?? null, reply);
+      return NextResponse.json({ ok: true });
+    }
+
+    // Открыть SwipeMark
+    if (text0.toLowerCase() === "/open") {
+      await reply("Открываем SwipeMark ⚡", [
+        [{ text: "⚡ Открыть SwipeMark", url: APP_URL }],
+      ]);
+      return NextResponse.json({ ok: true });
+    }
+
+    // Справка
+    if (text0.toLowerCase() === "/help") {
+      await reply(HELP_TEXT);
       return NextResponse.json({ ok: true });
     }
 
@@ -177,7 +240,7 @@ export async function POST(req: NextRequest) {
             });
           }
         }
-        await reply(`Сохранено ✅ (#${existingId})`);
+        await sendSavedReply(userId, reply);
         return NextResponse.json({ ok: true });
       }
       const albumCardId = await createCard(
@@ -199,7 +262,7 @@ export async function POST(req: NextRequest) {
       kickEnrich(userId, albumCardId);
       kickMediaCache(userId, albumCardId);
       await trackCapture(userId, primaryType, "telegram_bot");
-      await reply(`Сохранено ✅ (#${albumCardId})`);
+      await sendSavedReply(userId, reply);
       return NextResponse.json({ ok: true });
     }
 
@@ -228,7 +291,7 @@ export async function POST(req: NextRequest) {
       kickMediaCache(userId, cardId);
       if (links.length > 0) kickMetaEnrich(userId, cardId);
       await trackCapture(userId, primaryType, "telegram_bot");
-      await reply(`Сохранено ✅ (#${cardId})`);
+      await sendSavedReply(userId, reply);
     }
   } catch (e) {
     console.error("Webhook logic error:", e);
@@ -352,6 +415,101 @@ function domainOf(url: string): string | null {
   }
 }
 
+const BOT_USERNAME = process.env.BOT_USERNAME || "SwipeMarkBot";
+const APP_URL = `https://t.me/${BOT_USERNAME}/app`;
+
+const START_TEXT = [
+  "Привет, я SwipeMark ⚡",
+  "",
+  "Отправляй мне ссылки, видео, посты или сообщения из Telegram.",
+  "Я сохраню их, а потом ты разберёшь всё свайпами в одном месте.",
+].join("\n");
+
+const HOW_TO_TEXT = [
+  "Просто перешли мне сообщение или отправь ссылку.",
+  "",
+  "Подойдут:",
+  "• статьи и сайты;",
+  "• YouTube-видео;",
+  "• посты из Telegram;",
+  "• Instagram и TikTok;",
+  "• фото, документы и обычные сообщения.",
+  "",
+  "Когда захочешь разобрать сохранёнки — нажми «Открыть SwipeMark».",
+].join("\n");
+
+const HELP_TEXT = [
+  "Как пользоваться SwipeMark ⚡",
+  "",
+  "• Отправь сюда ссылку, видео или пост — я сохраню.",
+  "• Нажми «Открыть SwipeMark», чтобы разобрать сохранёнки.",
+  "• Свайп влево — в архив, вправо — «почитать потом», вверх — открыть.",
+  "• AI сам разложит по папкам и проставит теги.",
+  "",
+  "Команды:",
+  "/open — открыть SwipeMark",
+  "/help — эта справка",
+  "/unlink — отвязать Telegram от аккаунта",
+].join("\n");
+
+/** Склонение слова «сохранёнка» после числа (аккузатив для кнопки, номинатив для текста). */
+function pluralSave(n: number): string {
+  const abs = Math.abs(n) % 100;
+  const d = Math.abs(n) % 10;
+  if (abs >= 11 && abs <= 14) return "сохранёнок";
+  if (d === 1) return "сохранёнку";
+  if (d >= 2 && d <= 4) return "сохранёнки";
+  return "сохранёнок";
+}
+
+function pluralUnsorted(n: number): string {
+  const abs = Math.abs(n) % 100;
+  const d = Math.abs(n) % 10;
+  if (abs >= 11 && abs <= 14) return "неразобранных сохранёнок";
+  if (d === 1) return "неразобранная сохранёнка";
+  if (d >= 2 && d <= 4) return "неразобранные сохранёнки";
+  return "неразобранных сохранёнок";
+}
+
+/**
+ * Ответ после сохранения: дружелюбный текст с числом неразобранных карточек
+ * и кнопкой, которая открывает Mini App сразу в колоде.
+ */
+async function sendSavedReply(
+  userId: string,
+  reply: (
+    text: string,
+    buttons?: { text: string; url?: string; callback_data?: string }[][]
+  ) => Promise<void>
+): Promise<void> {
+  let n: number;
+  try {
+    const counts = await getCountsForUser(userId);
+    n = counts.unsorted;
+  } catch (e) {
+    console.error("Counts error:", e);
+    n = 1;
+  }
+
+  if (n < 1) {
+    await reply("Сохранил ✅");
+    return;
+  }
+
+  let text: string;
+  if (n === 1) {
+    text = "Сохранил ✅\nВ очереди: 1 неразобранная сохранёнка.";
+  } else if (n <= 29) {
+    text = `Сохранил ✅\nТеперь в очереди ${n} ${pluralUnsorted(n)}.`;
+  } else {
+    text = `Сохранил ✅\nВ очереди уже ${n} сохранёнок. Самое время разобрать первые 10.`;
+  }
+
+  await reply(text, [
+    [{ text: `Разобрать ${n} ${pluralSave(n)}`, url: `${APP_URL}?startapp=deck` }],
+  ]);
+}
+
 /**
  * Запускает AI-обогащение в фоне (после ответа Telegram).
  * Любые ошибки глотаем — карточка и так сохранена.
@@ -412,7 +570,10 @@ function kickMetaEnrich(userId: string, cardId: string): void {
 async function handleStart(
   fromId: number,
   code: string | null,
-  reply: (text: string) => Promise<void>
+  reply: (
+    text: string,
+    buttons?: { text: string; url?: string; callback_data?: string }[][]
+  ) => Promise<void>
 ): Promise<void> {
   const { consumePairingCode, markCodeUsed, linkTelegram } = await import(
     "@/lib/db/pairing"
@@ -422,7 +583,13 @@ async function handleStart(
   );
 
   if (!code) {
-    await reply("Привет! Отправь код из приложения SwipeMark, например: /start ABCDEFGH");
+    await reply(START_TEXT, [
+      [{ text: "⚡ Открыть SwipeMark", url: APP_URL }],
+      [
+        { text: "📥 Как сохранять", callback_data: "how" },
+        { text: "❓ Помощь", callback_data: "help" },
+      ],
+    ]);
     return;
   }
 

@@ -22,6 +22,7 @@ type TelegramWebApp = {
       username?: string;
       photo_url?: string;
     };
+    start_param?: string;
     query_id?: string;
     auth_date?: string;
     hash?: string;

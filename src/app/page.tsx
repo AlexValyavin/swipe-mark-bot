@@ -152,6 +152,15 @@ export default function Home() {
   const user = twa?.initDataUnsafe?.user;
   const initData = twa?.initData;
 
+  // Кнопка «Разобрать N сохранёнок» в боте открывает Mini App с startapp=deck —
+  // сразу в колоду (вкладка inbox по умолчанию).
+  useEffect(() => {
+    if (twa?.initDataUnsafe?.start_param === "deck") {
+      setTab("inbox");
+      setNavHidden(false);
+    }
+  }, [twa]);
+
   const loadSettings = async () => {
     try {
       const res = await fetch("/api/settings");
