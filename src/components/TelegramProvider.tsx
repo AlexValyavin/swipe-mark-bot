@@ -32,6 +32,7 @@ type TelegramWebApp = {
   themeParams?: ThemeParams;
   ready: () => void;
   setHeaderColor: (color: string) => void;
+  setBottomBarColor?: (color: string) => void;
   expand: () => void;
   close: () => void;
   isFullscreen?: boolean;
@@ -93,6 +94,16 @@ function applyThemeParams(app: TelegramWebApp) {
   }
 }
 
+/**
+ * Красим нативную Bottom Bar Telegram под тему приложения.
+ * Ключевое слово "secondary_bg_color" — Telegram сам следит за сменой темы.
+ */
+function applyBottomBarColor(app: TelegramWebApp) {
+  if (typeof app.setBottomBarColor === "function") {
+    app.setBottomBarColor("secondary_bg_color");
+  }
+}
+
 export function TelegramProvider({ children }: { children: React.ReactNode }) {
   const [twa, setTwa] = useState<TelegramWebApp | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -106,6 +117,7 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
       existing.ready();
       existing.expand();
       applyThemeParams(existing);
+      applyBottomBarColor(existing);
       setTimeout(() => {
         setTwa(existing);
         setIsFullscreen(!!existing.isFullscreen);
@@ -122,6 +134,7 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
       if (app?.initDataUnsafe?.user) {
         app.ready();
         applyThemeParams(app);
+        applyBottomBarColor(app);
         setTimeout(() => {
           setTwa(app);
           setIsFullscreen(!!app.isFullscreen);
