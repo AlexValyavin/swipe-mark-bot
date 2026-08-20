@@ -163,11 +163,108 @@ body {
   justify-content: center;
   margin-top: 8px;
 }
-.hero-meta {
-  margin-top: 8px;
-  font-size: 13px;
+/* Hero flow (animation mock) */
+.hero-flow {
+  margin-top: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+.flow-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.flow-chip {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.flow-chip-accent {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border-color: transparent;
+  box-shadow: 0 6px 18px rgba(99, 102, 241, 0.4);
+}
+.flow-arrow {
   color: var(--muted);
-  letter-spacing: 0.02em;
+  font-size: 18px;
+  font-weight: 700;
+}
+.flow-card {
+  width: min(320px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  animation: flowFloat 4s ease-in-out infinite;
+}
+@keyframes flowFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+.flow-card-media {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 140px;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(168, 85, 247, 0.35), transparent 60%),
+    linear-gradient(160deg, #141418, #1c1c22);
+}
+.flow-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  font-size: 18px;
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.5);
+}
+.flow-card-body {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.flow-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+.flow-actions {
+  display: flex;
+  gap: 8px;
+}
+.flow-act {
+  flex: 1;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 0;
+  border-radius: 999px;
+}
+.flow-archive {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+.flow-later {
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
 }
 
 /* Buttons */
@@ -229,26 +326,36 @@ h2 {
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
-.problem-cards {
+.stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 16px;
   margin-top: 32px;
 }
-.card {
+.stat {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 24px;
+  text-align: center;
 }
-.card-emoji {
-  font-size: 28px;
+.stat-num {
   display: block;
-  margin-bottom: 12px;
+  font-size: clamp(2rem, 5vw, 2.6rem);
+  font-weight: 800;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
-.card p {
+.stat-label {
+  display: block;
+  margin-top: 4px;
   color: var(--muted);
   font-size: 14px;
+}
+.problem-text {
+  margin-top: 32px;
 }
 
 /* How */
@@ -277,6 +384,11 @@ h2 {
   font-size: 14px;
   margin-bottom: 12px;
 }
+.step-emoji {
+  display: block;
+  font-size: 32px;
+  margin-bottom: 12px;
+}
 .step h3 {
   font-size: 18px;
   margin-bottom: 8px;
@@ -284,6 +396,11 @@ h2 {
 .step p {
   color: var(--muted);
   font-size: 14px;
+}
+.step b {
+  color: var(--text);
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 /* Screens */
@@ -328,9 +445,6 @@ h2 {
   padding: 40px 32px;
   text-align: center;
 }
-.ai-emoji {
-  font-size: 36px;
-}
 .ai-card h2 {
   margin: 8px 0 12px;
 }
@@ -352,6 +466,200 @@ h2 {
   padding: 8px 16px;
   font-size: 13px;
   color: var(--text);
+}
+.ai-demo {
+  max-width: 420px;
+  margin: 0 auto 24px;
+  text-align: left;
+}
+.ai-demo-summary {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+}
+.ai-demo-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 6px 14px;
+  margin-bottom: 12px;
+}
+.ai-demo-text {
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+.ai-demo-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.ai-demo-tags span {
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #c7d2fe;
+}
+.ai-demo-folder {
+  display: inline-block;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Sources */
+.sources {
+  border-top: 1px solid var(--line);
+}
+.sources-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 32px;
+}
+.source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.source-icon {
+  font-size: 18px;
+}
+
+/* Telegram advantage */
+.adv {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.adv-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+  text-align: center;
+}
+.adv-text h2 {
+  margin-bottom: 8px;
+}
+.adv-flow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.adv-arrow {
+  font-size: 24px;
+}
+
+/* Pricing */
+.pricing {
+  border-top: 1px solid var(--line);
+}
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  max-width: 640px;
+  margin: 32px auto 0;
+}
+.price-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 32px 24px;
+  text-align: center;
+}
+.price-card-featured {
+  border-color: rgba(99, 102, 241, 0.6);
+  background: linear-gradient(160deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.08));
+}
+.price-card h3 {
+  font-size: 20px;
+  margin-bottom: 8px;
+}
+.price-card p {
+  color: var(--muted);
+  font-size: 14px;
+  min-height: 44px;
+}
+.price-tag {
+  margin-top: 20px;
+  font-size: 28px;
+  font-weight: 800;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.pricing-note {
+  margin-top: 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* FAQ */
+.faq {
+  border-top: 1px solid var(--line);
+}
+.faq-item {
+  max-width: 640px;
+  margin: 0 auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+}
+.faq-item + .faq-item {
+  margin-top: 12px;
+}
+.faq-item summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 15px;
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+.faq-item summary::after {
+  content: "+";
+  font-size: 20px;
+  color: var(--muted);
+  transition: transform 0.2s;
+}
+.faq-item[open] summary::after {
+  transform: rotate(45deg);
+}
+.faq-item p {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 14px;
 }
 
 /* CTA */
