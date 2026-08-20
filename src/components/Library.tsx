@@ -27,6 +27,7 @@ import type { Bookmark } from "@/app/api/bookmarks/route";
 import { useTelegram } from "@/components/TelegramProvider";
 import { useI18n } from "@/components/I18nProvider";
 import { SourceBadge, MetaStatusDot } from "@/components/SourceBadge";
+import { trackClient } from "@/lib/analyticsClient";
 
 export type FolderMeta = {
   id: string;
@@ -217,6 +218,17 @@ export function Library({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
+  const searchRef = useRef("");
+
+  // Поиск использован: трекаем при непустом запросе.
+  useEffect(() => {
+    if (q.trim() && q.trim() !== searchRef.current) {
+      searchRef.current = q.trim();
+      trackClient("search_used", { query_length: q.trim().length });
+    }
+    if (!q.trim()) searchRef.current = "";
+  }, [q]);
+
   const refresh = () => {
     telegram?.haptic.selection();
     load();
@@ -235,6 +247,7 @@ export function Library({
     }
     telegram?.haptic.selection();
     await load();
+    trackClient("folder_created", { emoji });
     return { ok: true };
   };
 
@@ -255,6 +268,9 @@ export function Library({
     });
     telegram?.haptic.selection();
     await load();
+    if (folderIds.length > 0) {
+      trackClient("item_moved_to_folder", { folder_count: folderIds.length });
+    }
   };
 
   const toggleInPicker = (folderId: string) => {
@@ -383,6 +399,7 @@ export function Library({
 
   const runBulkAi = async () => {
     if (selectedIds.size === 0) return;
+    trackClient("ai_sort_requested", { scope: "selected", count: selectedIds.size });
     setMassBusy(true);
     try {
       const res = await fetch("/api/cards/bulk-ai", {
@@ -393,6 +410,7 @@ export function Library({
       const data = await res.json();
       if (!res.ok || data.error) {
         telegram?.haptic.notification("error");
+        trackClient("ai_sort_completed", { status: "error", scope: "selected" });
         return;
       }
       if (!data.jobId) {
@@ -400,6 +418,7 @@ export function Library({
         telegram?.haptic.selection();
         exitSelect();
         await load();
+        trackClient("ai_sort_completed", { status: "done", scope: "selected", done: 0 });
         return;
       }
       // Поллим job до завершения.
@@ -412,16 +431,24 @@ export function Library({
           if (s.ok && j.status !== "running") {
             running = false;
             telegram?.haptic.notification(j.status === "done" ? "success" : "warning");
+            trackClient("ai_sort_completed", {
+              status: j.status,
+              scope: "selected",
+              done: j.done ?? 0,
+              failed: j.failed ?? 0,
+            });
           }
         } catch {
           running = false;
           telegram?.haptic.notification("error");
+          trackClient("ai_sort_completed", { status: "network_error", scope: "selected" });
         }
       }
       exitSelect();
       await load();
     } catch {
       telegram?.haptic.notification("error");
+      trackClient("ai_sort_completed", { status: "error", scope: "selected" });
     } finally {
       setMassBusy(false);
     }
@@ -1527,6 +1554,7 @@ function AutosortSheet({
 
   const start = async () => {
     setStarting(true);
+    trackClient("ai_sort_requested", { scope: "unsorted", count });
     try {
       const res = await fetch("/api/cards/bulk-ai", {
         method: "POST",
@@ -1546,6 +1574,12 @@ function AutosortSheet({
             if (j.status !== "running") {
               stopPolling();
               telegram?.haptic.notification(j.status === "done" ? "success" : "warning");
+              trackClient("ai_sort_completed", {
+                scope: "unsorted",
+                status: j.status,
+                done: j.done ?? 0,
+                failed: j.failed ?? 0,
+              });
               onDone();
             }
           }

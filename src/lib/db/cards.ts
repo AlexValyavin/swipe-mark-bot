@@ -504,6 +504,15 @@ export async function getCountsForUser(userId: string): Promise<UserCounts> {
   return { inDeck, readLater, archived, unsorted };
 }
 
+/** Сколько карточек у пользователя всего (для метрики first_capture). */
+export async function countCardsForUser(userId: string): Promise<number> {
+  const { count } = await getAdminDb()
+    .from("cards")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId);
+  return count ?? 0;
+}
+
 /**
  * Нормализация URL для дедупликации: lowercase host, убираем www.,
  * сбрасываем UTM-параметры и фрагмент, убираем завершающий слеш.

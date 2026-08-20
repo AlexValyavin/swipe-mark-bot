@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
 import { getForUser, updateCard } from "@/lib/db/cards";
 import {
+  countActionsForUser,
   getLatestStatusChange,
   hasIdempotencyKey,
   logAction,
   type SwipeActionName,
 } from "@/lib/db/swipes";
+import { track } from "@/lib/analytics";
 
 export const runtime = "nodejs";
 
@@ -88,6 +90,29 @@ export async function POST(req: NextRequest) {
       previousStatus: action === "undo" ? null : currentStatus,
       idempotencyKey: idempotencyKey || null,
     });
+
+    // Аналитика: мапим действия на бизнес-события (fire-and-forget).
+    const EVENT_MAP: Record<string, string> = {
+      left: "swipe_archive",
+      right: "swipe_later",
+      done: "swipe_keep",
+      open: "item_opened",
+      later: "swipe_later",
+    };
+    const event = EVENT_MAP[action as string];
+    if (event) {
+      const hadActions = (await countActionsForUser(userId)) > 1;
+      void track(event, userId, {
+        content_type: bookmark.type || null,
+        domain: bookmark.domain || null,
+      });
+      if (!hadActions) {
+        void track("first_swipe", userId, {
+          action: event,
+          content_type: bookmark.type || null,
+        });
+      }
+    }
 
     return NextResponse.json({
       ok: true,

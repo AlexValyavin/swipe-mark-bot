@@ -54,3 +54,12 @@ export async function getLatestStatusChange(
     previous_status: data.previous_status,
   };
 }
+
+/** Сколько действий совершил пользователь (для метрики first_swipe). */
+export async function countActionsForUser(userId: string): Promise<number> {
+  const { count } = await getAdminDb()
+    .from("swipe_actions")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId);
+  return count ?? 0;
+}

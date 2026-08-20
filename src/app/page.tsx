@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useTelegram } from "@/components/TelegramProvider";
 import { useI18n, syncLang } from "@/components/I18nProvider";
+import { initClientAnalytics, trackClient } from "@/lib/analyticsClient";
 import { SwipeDeck } from "@/components/SwipeDeck";
 import type { SwipeDirection } from "@/components/BookmarkCard";
 import { getOpenTarget } from "@/lib/openTarget";
@@ -280,6 +281,7 @@ export default function Home() {
   const finishOnboarding = async () => {
     telegram?.haptic.impact("medium");
     setOnboarded(true);
+    trackClient("onboarding_completed");
     try {
       await fetch("/api/settings", {
         method: "POST",
@@ -379,6 +381,34 @@ export default function Home() {
     };
   }, []);
 
+  // Онбординг показан.
+  useEffect(() => {
+    if (onboarded === false) {
+      trackClient("onboarding_started");
+    }
+  }, [onboarded]);
+
+  // Библиотека открыта (переход на вкладку).
+  useEffect(() => {
+    if (tab === "library") {
+      trackClient("library_opened");
+    }
+  }, [tab]);
+
+  // Сессия завершена: колода опустела, но карточки есть.
+  const completedRef = useRef(false);
+  useEffect(() => {
+    if (deck.length === 0 && bookmarks.length > 0 && sessionDone > 0 && !completedRef.current) {
+      completedRef.current = true;
+      trackClient("session_completed", {
+        done: sessionDone,
+        archived: sessionArchived,
+        later: sessionLater,
+        opened: sessionOpened,
+      });
+    }
+  }, [deck.length, bookmarks.length, sessionDone, sessionArchived, sessionLater, sessionOpened]);
+
   useEffect(() => {
     if (!initData || !user) {
       setLoading(false);
@@ -398,6 +428,8 @@ export default function Home() {
         if (!authRes.ok) {
           throw new Error(t("app.error.auth"));
         }
+        const authData = (await authRes.json()) as { uid?: string };
+        initClientAnalytics(authData.uid);
         await Promise.all([loadSettings(), loadBookmarks(), loadCounts()]);
       } catch (e) {
         setError(e instanceof Error ? e.message : t("app.error.load"));

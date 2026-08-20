@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
 import { getSessionUser } from "@/lib/session";
 import { getAdminDb } from "@/lib/db/supabase";
-import { createCard, normalizeUrl } from "@/lib/db/cards";
+import { countCardsForUser, createCard, normalizeUrl } from "@/lib/db/cards";
+import { track } from "@/lib/analytics";
 
 export const runtime = "nodejs";
 const MAX_URLS = 20;
@@ -101,6 +102,22 @@ export async function POST(req: NextRequest) {
           console.error(`Meta enrich error for card ${cardId}:`, e);
         }
       });
+    }
+
+    if (created.length > 0) {
+      const hadCards = (await countCardsForUser(userId)) > created.length;
+      void track("item_received", userId, {
+        source: "mini_app",
+        content_type: "link",
+        count: created.length,
+      });
+      if (!hadCards) {
+        void track("first_capture", userId, {
+          source: "mini_app",
+          content_type: "link",
+          count: created.length,
+        });
+      }
     }
 
     return NextResponse.json({ created, duplicates });

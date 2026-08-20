@@ -15,6 +15,7 @@ import {
 import { fmtDuration, fmtReadMinutes } from "@/lib/format";
 import { getOpenTarget } from "@/lib/openTarget";
 import { useI18n } from "@/components/I18nProvider";
+import { trackClient } from "@/lib/analyticsClient";
 
 export type SwipeDirection = "left" | "right" | "up";
 
@@ -106,6 +107,7 @@ export function BookmarkCard({
 
   const requestSummary = async () => {
     if (summaryLoading || summaryDone) return;
+    trackClient("ai_summary_requested", { content_type: bookmark.type || null });
     setSummaryLoading(true);
     setSummaryError(null);
     try {
@@ -115,13 +117,16 @@ export function BookmarkCard({
         if (data.summary) {
           setSummaryText(data.summary);
           setSummaryDone(true);
+          trackClient("ai_summary_completed", { status: "ok", content_type: bookmark.type || null });
         }
       } else {
         const data = await res.json().catch(() => ({}));
         setSummaryError(data.error || t("common.error.generic"));
+        trackClient("ai_summary_completed", { status: "failed", content_type: bookmark.type || null });
       }
     } catch {
       setSummaryError(t("common.error.network"));
+      trackClient("ai_summary_completed", { status: "network_error", content_type: bookmark.type || null });
     } finally {
       setSummaryLoading(false);
     }

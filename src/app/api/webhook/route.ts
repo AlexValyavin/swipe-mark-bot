@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
 import {
   appendAttachment,
+  countCardsForUser,
   createCard,
   findCardIdByMediaGroup,
   updateCard,
   type AttachmentInput,
 } from "@/lib/db/cards";
 import { getOrCreateProfileByTelegramId } from "@/lib/db/profiles";
+import { track } from "@/lib/analytics";
 
 export const runtime = "nodejs";
 
@@ -196,6 +198,7 @@ export async function POST(req: NextRequest) {
       );
       kickEnrich(userId, albumCardId);
       kickMediaCache(userId, albumCardId);
+      await trackCapture(userId, primaryType, "telegram_bot");
       await reply(`Сохранено ✅ (#${albumCardId})`);
       return NextResponse.json({ ok: true });
     }
@@ -224,6 +227,7 @@ export async function POST(req: NextRequest) {
       kickEnrich(userId, cardId);
       kickMediaCache(userId, cardId);
       if (links.length > 0) kickMetaEnrich(userId, cardId);
+      await trackCapture(userId, primaryType, "telegram_bot");
       await reply(`Сохранено ✅ (#${cardId})`);
     }
   } catch (e) {
@@ -232,6 +236,18 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true });
+}
+
+/**
+ * Аналитика захвата: item_received + first_capture (первая карточка пользователя).
+ * Fire-and-forget, никогда не роняет webhook.
+ */
+async function trackCapture(userId: string, contentType: string, source: string): Promise<void> {
+  const hadCards = (await countCardsForUser(userId)) > 1;
+  void track("item_received", userId, { source, content_type: contentType });
+  if (!hadCards) {
+    void track("first_capture", userId, { source, content_type: contentType });
+  }
 }
 
 function buildAttachment(message: TelegramMessage): AttachmentInput | null {

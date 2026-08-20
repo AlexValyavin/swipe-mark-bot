@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
 import { getForUser } from "@/lib/db/cards";
 import { generateCardSummary } from "@/lib/ai/enrich";
+import { track } from "@/lib/analytics";
 
 export const runtime = "nodejs";
 
@@ -25,7 +26,15 @@ export async function POST(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
+    void track("ai_summary_requested", userId, {
+      content_type: card.type || null,
+    });
+
     const outcome = await generateCardSummary(userId, id);
+    void track("ai_summary_completed", userId, {
+      status: outcome.status,
+      content_type: card.type || null,
+    });
     switch (outcome.status) {
       case "ok":
         return NextResponse.json({ ok: true, summary: outcome.summary });

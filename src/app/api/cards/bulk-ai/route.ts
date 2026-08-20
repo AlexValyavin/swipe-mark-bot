@@ -4,6 +4,7 @@ import { getSessionUser } from "@/lib/session";
 import { getAdminDb } from "@/lib/db/supabase";
 import { enrichCard } from "@/lib/ai/enrich";
 import { createBulkJob, getBulkJob, updateBulkJob, bulkJobStatusToClient } from "@/lib/db/jobs";
+import { track } from "@/lib/analytics";
 
 export const runtime = "nodejs";
 const MAX_BULK = 30;
@@ -68,6 +69,10 @@ export async function POST(req: NextRequest) {
     }
 
     const job = await createBulkJob(userId, cardIds.length);
+    void track("ai_sort_requested", userId, {
+      scope: body.scope === "unsorted" ? "unsorted" : "selected",
+      count: cardIds.length,
+    });
 
     // Фоновая обработка чанками: прогресс в БД, поллинг с клиента.
     after(async () => {
@@ -92,8 +97,20 @@ export async function POST(req: NextRequest) {
           await updateBulkJob(job.id, { done, failed });
         }
         await updateBulkJob(job.id, { done, failed, status: "done" });
+        void track("ai_sort_completed", userId, {
+          scope: body.scope === "unsorted" ? "unsorted" : "selected",
+          total: cardIds.length,
+          done,
+          failed,
+          status: "done",
+        });
       } catch (e) {
         console.error("Bulk AI job error:", e);
+        void track("ai_sort_completed", userId, {
+          scope: body.scope === "unsorted" ? "unsorted" : "selected",
+          total: cardIds.length,
+          status: "error",
+        });
         try {
           await updateBulkJob(job.id, { done, failed, status: "error" });
         } catch {
