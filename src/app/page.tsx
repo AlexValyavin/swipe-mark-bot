@@ -388,6 +388,24 @@ export default function Home() {
     }
   }, [onboarded]);
 
+  // Первое открытие колоды (один раз на пользователя через localStorage).
+  useEffect(() => {
+    if (deck.length > 0) {
+      let seen = false;
+      try {
+        seen = localStorage.getItem("swipe-deck-seen") === "1";
+      } catch {
+        seen = false;
+      }
+      if (!seen) {
+        try {
+          localStorage.setItem("swipe-deck-seen", "1");
+        } catch {}
+        trackClient("first_deck_opened", { deck_size: deck.length });
+      }
+    }
+  }, [deck.length]);
+
   // Библиотека открыта (переход на вкладку).
   useEffect(() => {
     if (tab === "library") {
