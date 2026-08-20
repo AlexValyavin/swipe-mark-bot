@@ -318,13 +318,7 @@ export function BookmarkCard({
             ))}
           </div>
         ) : null}
-        {!bookmark.aiSummary && !summaryDone && bookmark.aiStatus === "processing" && (
-          <div className="mt-2 flex items-center gap-2 rounded-lg bg-surface px-3 py-2">
-            <Loader2 className="size-3.5 animate-spin text-muted" />
-            <span className="text-fs-sm text-muted">{t("card.summaryLoading")}</span>
-          </div>
-        )}
-        {!bookmark.aiSummary && !summaryDone && aiAvailable && bookmark.aiStatus === "failed" && (
+        {!bookmark.aiSummary && !summaryDone && aiAvailable && (
           <div className="mt-2">
             {summaryLoading ? (
               <div className="flex items-center gap-2 rounded-lg bg-surface px-3 py-2">

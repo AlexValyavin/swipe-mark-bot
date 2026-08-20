@@ -53,7 +53,7 @@ export async function buildPrompt(
     `Папки пользователя: ${folderLine}`,
     `Тип: ${card.source_type}. Заголовок/текст: ${title}${text ? ` ${text}` : ""}`,
     `Ссылки: ${urls.join(", ") || "нет"}`,
-    'Верни строго JSON: {"title": string|null, "summary": string|null, "tags": string[](≤3), "folder": string|null, "confidence": 0..1}',
+    'Верни строго JSON: {"title": string|null, "tags": string[](≤3), "folder": string|null, "confidence": 0..1}. Саммари НЕ нужно, summary всегда null.',
   ].join("\n");
 }
 
@@ -229,10 +229,10 @@ export async function enrichCard(userId: string, cardId: string): Promise<Enrich
     }
   }
 
-  // Апсерт результатов.
+  // Апсерт результатов. ai_summary НЕ трогаем: саммари генерируется только
+  // вручную по кнопке (generateCardSummary) и не должно затираться авто-обогащением.
   const patch: Record<string, unknown> = {
     ai_title: suggestion.title,
-    ai_summary: suggestion.summary,
     ai_folder_id: aiFolderId,
     ai_confidence: suggestion.confidence,
     ai_status: "done",
@@ -250,20 +250,6 @@ export async function enrichCard(userId: string, cardId: string): Promise<Enrich
       await addCardTags(userId, cardId, suggestion.tags, "ai");
     } catch (e) {
       console.error("AI tags save failed:", e);
-    }
-  }
-
-  // Саммари должно быть всегда: промпт сортировки может вернуть summary: null.
-  // В таком случае генерируем его отдельным вызовом (специализированный промпт).
-  if (!suggestion.summary) {
-    const summaryOutcome = await generateCardSummary(userId, cardId);
-    if (summaryOutcome.status === "failed") {
-      await db
-        .from("cards")
-        .update({ ai_status: "failed", updated_at: new Date().toISOString() })
-        .eq("id", cardId)
-        .eq("user_id", userId);
-      return { status: "failed", reason: summaryOutcome.reason };
     }
   }
 
