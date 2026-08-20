@@ -253,6 +253,20 @@ export async function enrichCard(userId: string, cardId: string): Promise<Enrich
     }
   }
 
+  // Саммари должно быть всегда: промпт сортировки может вернуть summary: null.
+  // В таком случае генерируем его отдельным вызовом (специализированный промпт).
+  if (!suggestion.summary) {
+    const summaryOutcome = await generateCardSummary(userId, cardId);
+    if (summaryOutcome.status === "failed") {
+      await db
+        .from("cards")
+        .update({ ai_status: "failed", updated_at: new Date().toISOString() })
+        .eq("id", cardId)
+        .eq("user_id", userId);
+      return { status: "failed", reason: summaryOutcome.reason };
+    }
+  }
+
   return { status: "done", suggestion, applied };
 }
 

@@ -430,6 +430,20 @@ export default function Home() {
       .finally(() => setLoading(false));
   };
 
+  // Тихий опрос: пока есть карточки в процессе AI/meta-обработки, обновляем
+  // данные без спиннера, чтобы саммари и метаданные появлялись сами.
+  useEffect(() => {
+    if (!initData || !user) return;
+    const busy = (b: Bookmark) =>
+      b.aiStatus === "processing" || b.metaStatus === "processing";
+    if (!deck.some(busy) && !later.some(busy) && !archived.some(busy)) return;
+    const timer = window.setInterval(() => {
+      loadBookmarks().catch(() => {});
+      loadCounts().catch(() => {});
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [initData, user?.id, deck, later, archived]);
+
   useEffect(() => {
     return () => {
       if (undoTimer.current) clearTimeout(undoTimer.current);

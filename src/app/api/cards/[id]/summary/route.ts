@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
 import { getForUser } from "@/lib/db/cards";
 import { generateCardSummary } from "@/lib/ai/enrich";
+import { getAdminDb } from "@/lib/db/supabase";
 import { track } from "@/lib/analytics";
 
 export const runtime = "nodejs";
@@ -37,6 +38,11 @@ export async function POST(
     });
     switch (outcome.status) {
       case "ok":
+        await getAdminDb()
+          .from("cards")
+          .update({ ai_status: "done", updated_at: new Date().toISOString() })
+          .eq("id", id)
+          .eq("user_id", userId);
         return NextResponse.json({ ok: true, summary: outcome.summary });
       case "no_ai":
         return NextResponse.json({ error: "AI не подключён" }, { status: 400 });
