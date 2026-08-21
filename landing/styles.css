@@ -691,6 +691,12 @@ h2 {
 .footer-inner a:hover {
   color: var(--text);
 }
+.footer-copyright {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  opacity: 0.8;
+}
 
 @media (max-width: 640px) {
   section {

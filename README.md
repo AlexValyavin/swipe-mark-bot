@@ -91,3 +91,9 @@ SwipeMark превращает накопленные сохранения в п
 Попробуй SwipeMark.
 
 [🚀 Попробовать SwipeMark](https://alexvalyavin.github.io/swipe-mark-bot/) · [💬 Открыть бота](https://t.me/SwipeMarkBot/app)
+
+---
+
+## Лицензия
+
+© 2026 Alex Valyavin. All rights reserved. The source code is proprietary and may not be copied, modified, distributed, or used without prior written permission.

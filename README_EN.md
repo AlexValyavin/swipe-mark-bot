@@ -91,3 +91,9 @@ Have a pile of unread saves?
 Try SwipeMark.
 
 [🚀 Try SwipeMark](https://alexvalyavin.github.io/swipe-mark-bot/) · [💬 Open Telegram Bot](https://t.me/SwipeMarkBot/app)
+
+---
+
+## License
+
+© 2026 Alex Valyavin. All rights reserved. The source code is proprietary and may not be copied, modified, distributed, or used without prior written permission.
