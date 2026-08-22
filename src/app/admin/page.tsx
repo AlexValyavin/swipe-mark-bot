@@ -49,14 +49,16 @@ export default function AdminPage() {
   };
 
   const loadModels = async () => {
+    if (!ai?.hasKey) { setMsg("Сначала сохраните ключ"); return; }
     setModelsLoading(true);
+    setMsg(null);
     try {
-      const p = provider;
-      const u = `/api/admin/ai/models?provider=${encodeURIComponent(p)}&baseUrl=${encodeURIComponent(baseUrl || "")}`;
-      const res = await fetch(u);
+      const params = new URLSearchParams({ provider });
+      if (provider === "custom" && baseUrl.trim()) params.set("baseUrl", baseUrl.trim());
+      const res = await fetch(`/api/admin/ai/models?${params}`);
       const data = await res.json();
-      if (res.ok) setModels(data.models || []);
-      else setMsg(data.error || "Ошибка загрузки моделей");
+      if (res.ok && data.models) setModels(data.models);
+      else setMsg(data.error || data.kind || "Ошибка загрузки моделей");
     } catch { setMsg("Ошибка сети"); }
     finally { setModelsLoading(false); }
   };
@@ -64,13 +66,18 @@ export default function AdminPage() {
   const saveAi = async (clearKey = false) => {
     setSaving(true); setMsg(null);
     try {
-      const body: any = { provider, model: model || null, customBaseUrl: baseUrl || null, allowByok };
+      const body: any = { provider, allowByok };
+      if (model.trim()) body.model = model.trim();
+      if (baseUrl.trim()) body.customBaseUrl = baseUrl.trim();
       if (clearKey) body.clearKey = true;
       else if (keyInput.trim()) body.key = keyInput.trim();
       const res = await fetch("/api/admin/ai", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const data = await res.json();
-      if (!res.ok) setMsg(data.error || "Ошибка сохранения");
-      else { setMsg("Сохранено"); setAi(data); setKeyInput(""); }
+      if (!res.ok) {
+        const details = (data as { details?: { fieldErrors?: Record<string, string[]> } })?.details?.fieldErrors;
+        const first = details ? Object.entries(details).map(([k, v]) => `${k}: ${v.join(", ")}`).join("; ") : null;
+        setMsg(first || data.error || "Ошибка сохранения");
+      } else { setMsg("Сохранено"); setAi(data); setKeyInput(""); }
     } catch { setMsg("Ошибка сети"); }
     finally { setSaving(false); }
   };
@@ -90,7 +97,7 @@ export default function AdminPage() {
 
   if (forbidden) {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 p-8 text-center">
+      <div className="flex h-dvh flex-col items-center justify-center gap-4 overflow-y-auto p-8 text-center hide-scrollbar">
         <p className="text-sm text-muted">403 Forbidden — доступ только для владельца.</p>
         <p className="text-xs text-muted">Открой админку через Telegram WebView или войди по QR</p>
         <a href="/admin/login" className="rounded-full bg-accent px-6 py-2.5 text-sm font-semibold text-accent-text">Войти по QR →</a>
@@ -99,7 +106,7 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-6 p-5">
+    <div className="mx-auto flex h-dvh max-w-3xl flex-col gap-6 overflow-y-auto p-5 hide-scrollbar">
       <h1 className="text-2xl font-bold">Admin — SwipeMark</h1>
 
       {/* AI провайдер — для всех */}

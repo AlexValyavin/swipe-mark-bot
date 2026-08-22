@@ -61,7 +61,7 @@ export default function AdminLoginPage() {
 
   if (linked) {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 p-8 text-center">
+      <div className="flex h-dvh flex-col items-center justify-center gap-4 overflow-y-auto p-8 text-center hide-scrollbar">
         <div className="text-5xl">✅</div>
         <p className="text-lg font-semibold text-text">Админ-вход подтверждён</p>
         <p className="text-sm text-muted">Возвращаемся в админку…</p>
@@ -70,7 +70,7 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center gap-6 p-6">
+    <div className="mx-auto flex h-dvh max-w-md flex-col items-center gap-6 overflow-y-auto p-6 hide-scrollbar">
       <h1 className="text-2xl font-bold">Вход в админку</h1>
       <p className="text-center text-sm text-muted">Отсканируй QR кодом из Telegram (только владелец) — боту придёт <code>/start admin_…</code></p>
 

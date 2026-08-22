@@ -11,8 +11,8 @@ const putSchema = z.object({
   provider: z.enum(["openrouter", "mistral", "openai", "custom"]).optional(),
   key: z.string().min(1).max(2000).optional(),
   clearKey: z.boolean().optional(),
-  model: z.string().min(1).max(200).optional(),
-  customBaseUrl: z.string().max(500).optional(),
+  model: z.string().min(1).max(200).nullable().optional(),
+  customBaseUrl: z.string().max(500).nullable().optional(),
   allowByok: z.boolean().optional(),
 });
 
@@ -89,9 +89,12 @@ export async function PUT(req: NextRequest) {
     else if (body.data.key !== undefined) patch.key = body.data.key;
     if (body.data.model !== undefined) patch.model = body.data.model;
     if (body.data.customBaseUrl !== undefined) {
-      let url = body.data.customBaseUrl.trim();
-      if (url && !/^https?:\/\//i.test(url)) url = `http://${url}`;
-      patch.baseUrl = url || null;
+      if (body.data.customBaseUrl === null) patch.baseUrl = null;
+      else {
+        let url = body.data.customBaseUrl.trim();
+        if (url && !/^https?:\/\//i.test(url)) url = `http://${url}`;
+        patch.baseUrl = url || null;
+      }
     }
     if (body.data.allowByok !== undefined) patch.allowByok = body.data.allowByok;
 

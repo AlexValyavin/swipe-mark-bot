@@ -24,29 +24,43 @@ export async function GET(req: NextRequest) {
       baseUrl: url.searchParams.get("baseUrl") || undefined,
     });
 
-    // Берём ключ из app_config (глобальный), а если передан provider — используем его
+    // Берём ключ из app_config, с фолбэком на env OPENROUTER_API_KEY
     const raw = await getGlobalAiRaw();
-    if (!raw?.keyEnc) {
-      return NextResponse.json({ error: "No API key configured" }, { status: 400 });
-    }
     let apiKey: string | null = null;
-    try {
-      apiKey = decryptSecret(raw.keyEnc);
-    } catch {}
+    let storedProvider: string | null = null;
+    let storedBaseUrl: string | null = null;
+    if (raw?.keyEnc) {
+      try {
+        apiKey = decryptSecret(raw.keyEnc);
+      } catch (e) {
+        console.error("Admin models decrypt failed:", e);
+        return NextResponse.json({ error: "Decrypt failed — AI_KEY_SECRET mismatch" }, { status: 500 });
+      }
+      storedProvider = raw.provider ?? null;
+      storedBaseUrl = raw.baseUrl ?? null;
+    }
     if (!apiKey) {
-      return NextResponse.json({ error: "No API key configured" }, { status: 400 });
+      const envKey = process.env.OPENROUTER_API_KEY?.trim() || null;
+      if (envKey) {
+        apiKey = envKey;
+        storedProvider = "openrouter";
+      }
+    }
+    if (!apiKey) {
+      return NextResponse.json({ error: "No API key configured — сохраните ключ" }, { status: 400 });
     }
 
-    const provider = (parsed.success && parsed.data.provider ? parsed.data.provider : raw.provider) as AiProvider;
-    const baseUrl = parsed.success && parsed.data.baseUrl !== undefined ? parsed.data.baseUrl : raw.baseUrl;
+    const provider = (parsed.success && parsed.data.provider ? parsed.data.provider : storedProvider) as AiProvider;
+    const rawBase = parsed.success && parsed.data.baseUrl !== undefined && parsed.data.baseUrl !== "" ? parsed.data.baseUrl : storedBaseUrl;
+    const baseUrl = rawBase && rawBase.trim() ? rawBase.trim() : undefined;
 
     try {
-      const models = await listModels(provider ?? "openrouter", apiKey, baseUrl ?? undefined);
+      const models = await listModels(provider ?? "openrouter", apiKey, baseUrl);
       return NextResponse.json({ models });
     } catch (e) {
       const kind = (e as AiError)?.kind ?? "network";
       const message = e instanceof Error ? e.message : "Unknown error";
-      const status = kind === "auth" ? 401 : kind === "rate" ? 429 : 200;
+      const status = kind === "auth" ? 401 : kind === "rate" ? 429 : 500;
       return NextResponse.json({ kind, error: message }, { status });
     }
   } catch (e) {
