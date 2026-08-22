@@ -35,7 +35,8 @@ export const ru = {
 
   // Свайп-колода
   "deck.hint.archive": "← Архив",
-  "deck.hint.later": "Потом →",
+  "deck.hint.later": "↑ Потом",
+  "deck.hint.keep": "Сохранить →",
   "deck.hint.open": "↑ Открыть",
   "deck.progress.done": "разобрано {done} из {total}",
   "deck.progress.left": "осталось",
@@ -43,6 +44,7 @@ export const ru = {
   "deck.last": "Последняя!",
   "deck.btn.archive": "Архив",
   "deck.btn.open": "Открыть",
+  "deck.btn.keep": "Сохранить",
   "deck.btn.later": "Потом",
 
   // Карточка
@@ -85,6 +87,7 @@ export const ru = {
   // Undo-тост
   "undo.action.archive": "В архив",
   "undo.action.later": "Отложено",
+  "undo.action.keep": "Сохранено",
   "undo.undo": "Отменить",
 
   // Очистка архива

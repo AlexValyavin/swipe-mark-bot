@@ -156,6 +156,7 @@ export function Library({
   // сброс viewMode при смене фильтра — возвращаемся в обзор
   useEffect(() => {
     if (folderId !== null || q.trim() || selectedTags.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setViewMode("overview");
     }
   }, [folderId, q, selectedTags]);

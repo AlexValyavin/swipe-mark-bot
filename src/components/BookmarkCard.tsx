@@ -57,6 +57,9 @@ export function BookmarkCard({
   const [summaryDone, setSummaryDone] = useState(false);
   const [aiAvailable, setAiAvailable] = useState<boolean | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setExpanded(false); setSheetOpen(false); }, [bookmark.id]);
   const telegram = useTelegram();
   const { t, lang } = useI18n();
   const x = useMotionValue(0);
@@ -117,6 +120,7 @@ export function BookmarkCard({
         if (data.summary) {
           setSummaryText(data.summary);
           setSummaryDone(true);
+          setExpanded(true);
           trackClient("ai_summary_completed", { status: "ok", content_type: bookmark.type || null });
         }
       } else {
@@ -174,12 +178,11 @@ export function BookmarkCard({
         y.set(0);
       }}
       onClick={() => {
-        if (!dragged.current) onOpen();
         dragged.current = false;
       }}
     >
-      {/* Media / Content Area */}
-      <div className="relative flex-1 w-full bg-bg min-h-[200px]">
+      {/* Media / Content Area — в expanded режиме картинка сверху компактная */}
+      <div className={`relative w-full bg-bg ${expanded ? "h-[30%] min-h-[140px] flex-shrink-0" : "flex-1 min-h-[200px]"}`}>
         {shownSrc && !(imgError && !fallbackSrc) ? (
           <img
             src={shownSrc}
@@ -258,34 +261,63 @@ export function BookmarkCard({
         )}
       </div>
 
-      {/* Info Area */}
-      <div className="flex-shrink-0 flex flex-col p-5 max-h-[55%] overflow-y-auto hide-scrollbar">
+      {/* Info Area — compact без скролла (свайп), в expanded весь текст со скроллом */}
+      <div
+        className={`flex flex-col p-5 ${expanded ? "flex-1 overflow-y-auto hide-scrollbar touch-auto" : "max-h-[52%] overflow-hidden flex-shrink-0 touch-none"}`}
+      >
         <h2 className="text-fs-title font-semibold leading-snug text-text line-clamp-3">
           {bookmark.title || t("card.noTitle")}
         </h2>
-        {summaryText && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setSheetOpen(true);
-            }}
-            className="mt-1.5 block w-full text-left text-fs-summary text-muted"
-          >
-            <span className="font-semibold text-text">{t("card.briefPrefix")}</span>
-            {summaryText}
-          </button>
-        )}
-        {bookmark.aiSummary && !summaryText && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setSheetOpen(true);
-            }}
-            className="mt-1.5 block w-full text-left text-fs-summary text-muted"
-          >
-            <span className="font-semibold text-text">{t("card.briefPrefix")}</span>
-            {bookmark.aiSummary}
-          </button>
+        {expanded ? (
+          <div className="mt-2 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-accent">
+                <Sparkles className="size-3" /> {t("card.brief")}
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpanded(false);
+                }}
+                className="rounded-full bg-surface px-2.5 py-1 text-xs font-medium text-muted hover:text-text"
+              >
+                {t("common.close")}
+              </button>
+            </div>
+            <p className="whitespace-pre-line text-fs-summary leading-relaxed text-text">
+              {summaryText ?? bookmark.aiSummary ?? bookmark.description ?? t("card.summaryUnavailable")}
+            </p>
+          </div>
+        ) : (
+          <>
+            {summaryText && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpanded(true);
+                }}
+                className="mt-1.5 block w-full text-left text-fs-summary text-muted line-clamp-2"
+              >
+                <span className="font-semibold text-text">{t("card.briefPrefix")}</span>
+                {summaryText}
+              </button>
+            )}
+            {bookmark.aiSummary && !summaryText && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpanded(true);
+                }}
+                className="mt-1.5 block w-full text-left text-fs-summary text-muted line-clamp-2"
+              >
+                <span className="font-semibold text-text">{t("card.briefPrefix")}</span>
+                {bookmark.aiSummary}
+              </button>
+            )}
+            {bookmark.description && !bookmark.aiSummary && !summaryText && (
+              <p className="mt-1.5 text-fs-summary text-muted line-clamp-3">{bookmark.description}</p>
+            )}
+          </>
         )}
         {bookmark.description && !bookmark.aiSummary && (
           <p className="mt-1.5 text-fs-summary text-muted">{bookmark.description}</p>
@@ -349,7 +381,7 @@ export function BookmarkCard({
             {t("card.metaFailed")}
           </div>
         )}
-        <div className="mt-auto flex items-center gap-3 pt-4">
+        <div className="mt-auto flex items-center gap-2 pt-4">
           <span className="flex min-w-0 items-center gap-1.5">
             {favicon ? (
               <img
@@ -363,7 +395,7 @@ export function BookmarkCard({
               {bookmark.domain || t("card.domainFallback")}
             </span>
           </span>
-          <span className="ml-auto flex items-center gap-2">
+          <span className="flex items-center gap-1.5">
             {isVideo && durationSeconds != null && durationSeconds > 0 && (
               <span className="flex items-center gap-1 rounded-md bg-surface px-1.5 py-0.5 text-fs-sm font-medium tabular-nums text-muted">
                 <Timer className="size-3.5" />
@@ -377,6 +409,16 @@ export function BookmarkCard({
               </span>
             )}
           </span>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen();
+            }}
+            className="ml-auto inline-flex items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-fs-sm font-medium text-accent hover:bg-accent/15 active:scale-95"
+          >
+            <ExternalLink className="size-3.5" />
+            {t("common.open")}
+          </button>
         </div>
         {metaFailed && (
           <FailedActions bookmark={bookmark} onRetry={onRetry} />

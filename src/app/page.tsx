@@ -263,17 +263,21 @@ export default function Home() {
       showUndoToast(bookmark);
       const res = await postAction(bookmark.id, "left");
       if (!res) loadBookmarks();
-    } else if (direction === "up") {
+    } else if (direction === "right") {
       telegram?.haptic.impact("heavy");
-      openBookmark(bookmark);
-    } else {
+      setDeck((prev) => prev.filter((b) => b.id !== bookmark.id));
+      setSessionDone((n) => n + 1);
+      showUndoToast(bookmark, t("undo.action.keep"));
+      const res = await postAction(bookmark.id, "done");
+      if (!res) loadBookmarks();
+    } else if (direction === "up") {
       telegram?.haptic.impact("light");
       setDeck((prev) => prev.filter((b) => b.id !== bookmark.id));
       setLater((prev) => [bookmark, ...prev.filter((b) => b.id !== bookmark.id)]);
       setSessionDone((n) => n + 1);
       setSessionLater((n) => n + 1);
       showUndoToast(bookmark, t("undo.action.later"));
-      const res = await postAction(bookmark.id, "right");
+      const res = await postAction(bookmark.id, "later");
       if (!res) loadBookmarks();
     }
   };

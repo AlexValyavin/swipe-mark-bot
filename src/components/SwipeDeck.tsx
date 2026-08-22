@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
-import { X, ExternalLink, Clock } from "lucide-react";
+import { X, Check, Clock } from "lucide-react";
 import { BookmarkCard, type SwipeDirection } from "@/components/BookmarkCard";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 import { useTelegram } from "@/components/TelegramProvider";
@@ -93,37 +93,35 @@ export function SwipeDeck({
               initial={{ opacity: 0, x: 12 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.3, type: "spring", stiffness: 220, damping: 22 }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-success/90 px-3 py-1.5 text-xs font-semibold text-white shadow-lg"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-emerald-500/90 px-3 py-1.5 text-xs font-semibold text-white shadow-lg"
             >
-              {t("deck.hint.later")}
+              {t("deck.hint.keep")}
             </motion.div>
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5, type: "spring", stiffness: 220, damping: 22 }}
-              className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-indigo-500/90 px-3 py-1.5 text-xs font-semibold text-white shadow-lg"
+              className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-amber-500/90 px-3 py-1.5 text-xs font-semibold text-white shadow-lg"
             >
-              {t("deck.hint.open")}
+              {t("deck.hint.later")}
             </motion.div>
           </div>
         )}
       </div>
 
-      {/* Прогресс разбора */}
+      {/* Прогресс — компактный: 3 / 11 + бар */}
       <div className="pointer-events-none absolute top-3 left-0 right-0 flex justify-center px-4" style={{ zIndex: 30 }}>
         <div className="w-full max-w-[300px] rounded-xl bg-black/50 px-3 py-2 backdrop-blur-sm">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-[10px] uppercase tracking-wide text-white/70">
-              {done !== undefined
-                ? t("deck.progress.done", { done, total })
-                : t("deck.progress.left")}
-            </span>
+          <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-bold text-white tabular-nums">
+              {done !== undefined ? `${done} / ${total}` : `${bookmarks.length}`}
+            </span>
+            <span className="text-[11px] text-white/70">
               {done !== undefined
                 ? bookmarks.length === 1
                   ? t("deck.last")
-                  : t("deck.progress.leftCount", { count: bookmarks.length })
-                : bookmarks.length}
+                  : `${t("deck.progress.left")} · ${bookmarks.length}`
+                : t("deck.progress.left")}
             </span>
           </div>
           {done !== undefined && (
@@ -160,27 +158,27 @@ export function SwipeDeck({
           <button
             onClick={() => {
               telegram?.haptic.impact("heavy");
-              onOpen(current);
+              handleSwipe("right");
             }}
-            aria-label={t("deck.btn.open")}
-            title={t("deck.btn.open")}
-            className="flex size-16 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-purple-500/40 transition-transform active:scale-90"
+            aria-label={t("deck.btn.keep")}
+            title={t("deck.btn.keep")}
+            className="flex size-16 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 transition-transform active:scale-90"
           >
-            <ExternalLink className="size-7" />
+            <Check className="size-7 stroke-[3]" />
           </button>
           {showLabels && (
-            <span className="text-[11px] font-medium text-muted">{t("deck.btn.open")}</span>
+            <span className="text-[11px] font-medium text-muted">{t("deck.btn.keep")}</span>
           )}
         </div>
         <div className="flex flex-col items-center gap-1.5">
           <button
             onClick={() => {
               telegram?.haptic.impact("light");
-              handleSwipe("right");
+              handleSwipe("up");
             }}
             aria-label={t("deck.btn.later")}
             title={t("deck.btn.later")}
-            className="flex size-14 items-center justify-center rounded-full border-2 border-success/40 bg-surface text-success transition-transform active:scale-90"
+            className="flex size-14 items-center justify-center rounded-full border-2 border-amber-400/40 bg-surface text-amber-400 transition-transform active:scale-90"
           >
             <Clock className="size-6" />
           </button>

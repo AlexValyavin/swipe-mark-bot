@@ -35,7 +35,8 @@ export const en = {
 
   // Swipe deck
   "deck.hint.archive": "← Archive",
-  "deck.hint.later": "Later →",
+  "deck.hint.later": "↑ Later",
+  "deck.hint.keep": "Keep →",
   "deck.hint.open": "↑ Open",
   "deck.progress.done": "done {done} of {total}",
   "deck.progress.left": "left",
@@ -43,6 +44,7 @@ export const en = {
   "deck.last": "Last one!",
   "deck.btn.archive": "Archive",
   "deck.btn.open": "Open",
+  "deck.btn.keep": "Keep",
   "deck.btn.later": "Later",
 
   // Card
@@ -85,6 +87,7 @@ export const en = {
   // Undo toast
   "undo.action.archive": "Archived",
   "undo.action.later": "Saved for later",
+  "undo.action.keep": "Kept",
   "undo.undo": "Undo",
 
   // Clear archive
