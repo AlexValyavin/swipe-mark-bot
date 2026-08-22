@@ -6,6 +6,8 @@ export interface ProfileRow {
   telegram_id: number | null;
   telegram_username: string | null;
   display_name: string | null;
+  plan: string;
+  plan_until: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -20,7 +22,37 @@ export interface UserSettingsRow {
   archive_ttl_hours: number | null;
   ui_scale: string;
   onboarded: boolean;
+  lang: string;
   updated_at: string;
+}
+
+export interface AppConfigRow {
+  key: string;
+  value: Json;
+  updated_at: string;
+}
+
+export interface AiUsageRow {
+  id: string;
+  user_id: string;
+  kind: string;
+  card_id: string | null;
+  status: string;
+  model: string | null;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  cost_usd: number | null;
+  created_at: string;
+}
+
+export interface AdminLogRow {
+  id: string;
+  actor_tg: number;
+  actor_user_id: string | null;
+  action: string;
+  target_user_id: string | null;
+  details: Json | null;
+  created_at: string;
 }
 
 export interface BulkJobRow {
@@ -163,6 +195,9 @@ export interface Database {
       swipe_actions: { Row: SwipeActionRow };
       pairing_codes: { Row: PairingCodeRow };
       meta_cache: { Row: MetaCacheRow };
+      app_config: { Row: AppConfigRow };
+      ai_usage: { Row: AiUsageRow };
+      admin_log: { Row: AdminLogRow };
     };
   };
 }

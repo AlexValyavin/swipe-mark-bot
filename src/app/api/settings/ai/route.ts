@@ -28,8 +28,55 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Глобальный AI-ключ владельца (env) — основной источник.
-    // Показываем клиенту как доступный (кнопка «Саммари» видна всем).
+    // 1) Глобальный конфиг из БД (admin) — с учётом allowByok
+    try {
+      const { getGlobalAiRaw } = await import("@/lib/db/appConfig");
+      const { decryptSecret: dec } = await import("@/lib/crypto");
+      const raw = await getGlobalAiRaw();
+      if (raw?.keyEnc) {
+        let gKey: string | null = null;
+        try {
+          gKey = dec(raw.keyEnc);
+        } catch {}
+        if (gKey) {
+          const allowByok = raw.allowByok ?? false;
+          if (!allowByok) {
+            return NextResponse.json({
+              provider: (raw.provider as AiProvider) ?? "openrouter",
+              model: raw.model || "deepseek/deepseek-v4-flash-0731",
+              mode: "auto",
+              hasKey: true,
+              keyMask: null,
+              customBaseUrl: raw.baseUrl ?? null,
+            });
+          }
+          // allowByok: если у юзера есть свой ключ — показываем его, иначе глобальный
+          const sByok = await getAiSettings(userId);
+          const hasByok = (() => {
+            if (!sByok?.ai_key_enc) return false;
+            try {
+              const k = dec(sByok.ai_key_enc);
+              return !!k && (sByok.ai_mode as string) !== "off";
+            } catch {
+              return false;
+            }
+          })();
+          if (!hasByok) {
+            return NextResponse.json({
+              provider: (raw.provider as AiProvider) ?? "openrouter",
+              model: raw.model || "deepseek/deepseek-v4-flash-0731",
+              mode: "auto",
+              hasKey: true,
+              keyMask: null,
+              customBaseUrl: raw.baseUrl ?? null,
+            });
+          }
+          // есть BYOK — падаем в per-user ветку ниже
+        }
+      }
+    } catch {}
+
+    // 2) Env fallback (до миграции app_config)
     const globalKey = process.env.OPENROUTER_API_KEY?.trim();
     if (globalKey) {
       return NextResponse.json({

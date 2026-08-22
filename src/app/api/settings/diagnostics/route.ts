@@ -1,25 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session";
-import { getProfileById } from "@/lib/db/profiles";
+import { isOwner } from "@/lib/auth/owner";
 import { listFailedCards } from "@/lib/db/meta";
 
 export const runtime = "nodejs";
-
-/**
- * Диагностика доступна только владельцу приложения (OWNER_TELEGRAM_ID).
- */
-async function isOwner(req: NextRequest): Promise<boolean> {
-  const ownerTgId = Number(process.env.OWNER_TELEGRAM_ID || 0);
-  if (!ownerTgId) return false;
-
-  const userId = await getSessionUser(req);
-  if (!userId) return false;
-
-  const profile = await getProfileById(userId);
-  if (!profile) return false;
-
-  return profile.telegram_id === ownerTgId;
-}
 
 export async function GET(req: NextRequest) {
   try {

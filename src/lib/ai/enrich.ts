@@ -1,5 +1,6 @@
 import { getAdminDb } from "@/lib/db/supabase";
 import { getAiSettings } from "@/lib/db/settings";
+import { getGlobalAiRaw } from "@/lib/db/appConfig";
 import { getFolderByName, listFolders } from "@/lib/db/folders";
 import { decryptSecret } from "@/lib/crypto";
 import {
@@ -107,7 +108,48 @@ async function resolveAiContext(userId: string): Promise<{
   model: string;
   baseUrl?: string;
 } | null> {
-  // Глобальный ключ владельца (env) — основной источник для всех пользователей.
+  // 1. Глобальный конфиг из БД (admin /api/admin/ai) — приоритет над env и BYOK
+  try {
+    const raw = await getGlobalAiRaw();
+    if (raw?.keyEnc) {
+      let gKey: string | null = null;
+      try {
+        gKey = decryptSecret(raw.keyEnc);
+      } catch {}
+      if (gKey) {
+        const allowByok = raw.allowByok ?? false;
+        if (allowByok) {
+          const sByok = await getAiSettings(userId);
+          const modeByok = (sByok?.ai_mode as EnrichMode) ?? "off";
+          if (sByok?.ai_key_enc && modeByok !== "off") {
+            try {
+              const k = decryptSecret(sByok.ai_key_enc);
+              if (k) {
+                const p = (sByok.provider as AiProvider) ?? "openrouter";
+                return {
+                  mode: modeByok,
+                  provider: p,
+                  apiKey: k,
+                  model: sByok.ai_model ?? PROVIDER_DEFAULT_MODELS[p],
+                  baseUrl: sByok.ai_custom_base_url ?? undefined,
+                };
+              }
+            } catch {}
+          }
+        }
+        // Глобальный (перекрывает BYOK если allowByok=false, или фолбэк если у юзера нет ключа)
+        return {
+          mode: "auto",
+          provider: (raw.provider as AiProvider) ?? "openrouter",
+          apiKey: gKey,
+          model: raw.model || "deepseek/deepseek-v4-flash-0731",
+          baseUrl: raw.baseUrl ?? undefined,
+        };
+      }
+    }
+  } catch {}
+
+  // 2. Env fallback (локальная разработка / до миграции app_config)
   const globalKey = process.env.OPENROUTER_API_KEY?.trim();
   if (globalKey) {
     return {
@@ -118,7 +160,7 @@ async function resolveAiContext(userId: string): Promise<{
     };
   }
 
-  // Fallback: BYOK-настройки пользователя (для локальной разработки).
+  // 3. Fallback: BYOK-настройки пользователя
   const s = await getAiSettings(userId);
   if (!s) return null;
   const mode = (s.ai_mode as EnrichMode) ?? "off";
