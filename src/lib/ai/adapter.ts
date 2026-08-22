@@ -125,10 +125,12 @@ export async function chatCompletion(
     throw new AiError("parse", "Failed to parse provider response");
   }
 
-  const content = data.choices?.[0]?.message?.content ?? null;
+  const content = data.choices?.[0]?.message?.content ?? "";
   if (typeof content !== "string") {
     throw new AiError("parse", "No content in provider response");
   }
+  // Empty content is allowed (e.g. for model probe) — treat as success, caller can decide
+  // Real enrich will fail later on JSON parse if needed
 
   return {
     content,
