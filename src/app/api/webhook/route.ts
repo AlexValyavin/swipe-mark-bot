@@ -582,9 +582,9 @@ async function handleAdminLogin(
   code: string,
   reply: (text: string, buttons?: { text: string; url?: string; callback_data?: string }[][]) => Promise<void>
 ): Promise<void> {
-  const ownerTgId = Number(process.env.OWNER_TELEGRAM_ID || 0);
-  if (!ownerTgId || fromId !== ownerTgId) {
-    await reply("⛔ Этот код только для владельца SwipeMark.");
+  const ownerTgId = Number(String(process.env.OWNER_TELEGRAM_ID || "").trim() || 0);
+  if (!ownerTgId || Number(fromId) !== ownerTgId) {
+    await reply(`⛔ Этот код только для владельца SwipeMark.\nВаш ID: ${fromId}, ожидаю: ${ownerTgId || "не задан"}. Проверь OWNER_TELEGRAM_ID в Vercel.`);
     return;
   }
   const { consumeAdminLoginCode, markAdminCodeUsed } = await import("@/lib/db/adminLogin");

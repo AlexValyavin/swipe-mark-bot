@@ -19,10 +19,10 @@ export async function GET(req: NextRequest) {
     if (expired) return NextResponse.json({ linked: false, expired: true });
     if (!linked) return NextResponse.json({ linked: false, expired: false });
 
-    // Проверяем совпадение с владельцем
-    const ownerTgId = Number(process.env.OWNER_TELEGRAM_ID || 0);
-    if (!ownerTgId || row.telegram_id !== ownerTgId) {
-      return NextResponse.json({ linked: true, authorized: false, telegram_id: row.telegram_id });
+    // Проверяем совпадение с владельцем (bigint может прийти строкой)
+    const ownerTgId = Number(String(process.env.OWNER_TELEGRAM_ID || "").trim() || 0);
+    if (!ownerTgId || Number(row.telegram_id) !== ownerTgId) {
+      return NextResponse.json({ linked: true, authorized: false, telegram_id: row.telegram_id, ownerTgId });
     }
 
     // Выдаём сессию владельцу (создаём профиль если впервые)
