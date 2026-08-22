@@ -6,7 +6,42 @@ export type FolderWithCount = Pick<
   "id" | "user_id" | "name" | "emoji" | "sort_order"
 > & { count: number };
 
+export const STARTER_FOLDERS: { emoji: string; name: string }[] = [
+  { emoji: "🧠", name: "Нейросети" },
+  { emoji: "💼", name: "Работа" },
+  { emoji: "📚", name: "Обучение" },
+  { emoji: "💡", name: "Проекты" },
+  { emoji: "💰", name: "Финансы" },
+  { emoji: "🎬", name: "Развлечения" },
+  { emoji: "🏠", name: "Жизнь" },
+  { emoji: "🌿", name: "Лайфстайл" },
+];
+
+export async function ensureStarterFolders(userId: string): Promise<FolderWithCount[]> {
+  const db = getAdminDb();
+  const { count } = await db
+    .from("folders")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId);
+  if ((count ?? 0) > 0) return [];
+
+  const rows = STARTER_FOLDERS.map((f, i) => ({
+    user_id: userId,
+    name: f.name,
+    emoji: f.emoji,
+    sort_order: i,
+  }));
+  const { data, error } = await db.from("folders").insert(rows).select("id, user_id, name, emoji, sort_order");
+  if (error) {
+    // race: another request seeded concurrently — ignore duplicate
+    if (error.code === "23505") return [];
+    throw error;
+  }
+  return (data ?? []).map((f) => ({ ...f, count: 0 }));
+}
+
 export async function listFolders(userId: string): Promise<FolderWithCount[]> {
+  await ensureStarterFolders(userId);
   const db = getAdminDb();
   const { data: folders, error } = await db
     .from("folders")

@@ -27,6 +27,7 @@ import type { Bookmark } from "@/app/api/bookmarks/route";
 import { useTelegram } from "@/components/TelegramProvider";
 import { useI18n } from "@/components/I18nProvider";
 import { SourceBadge, MetaStatusDot } from "@/components/SourceBadge";
+import { MaterialSheet } from "@/components/MaterialSheet";
 import { trackClient } from "@/lib/analyticsClient";
 
 export type FolderMeta = {
@@ -106,7 +107,7 @@ export function Library({
   onOpenFolderDeck,
 }: Props) {
   const telegram = useTelegram();
-  const { t, lang } = useI18n();
+  const { t, tp, lang } = useI18n();
   const [tab, setTab] = useState<LibraryTab>("deck");
   const [folderId, setFolderId] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -132,6 +133,7 @@ export function Library({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [tagMenuCard, setTagMenuCard] = useState<Bookmark | null>(null);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
+  const [detailBookmark, setDetailBookmark] = useState<Bookmark | null>(null);
 
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -477,123 +479,158 @@ export function Library({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* Header: title + search + filters */}
-      <div className="flex items-center gap-2 px-5 py-2">
-        <h1 className="shrink-0 text-lg font-bold text-text">{t("library.title")}</h1>
-        <div className="flex flex-1 items-center gap-2 rounded-xl bg-surface px-3 py-2">
-          <Search className="size-4 text-muted" />
+      {/* Header: Мои сохранёнки + ＋ / ⋯ */}
+      <div className="flex items-center justify-between px-5 py-3">
+        <h1 className="text-xl font-bold tracking-tight text-text">{t("library.title")}</h1>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setCreateOpen(true)}
+            aria-label={t("library.createFolder")}
+            className="flex size-9 items-center justify-center rounded-full bg-surface text-text active:scale-90"
+          >
+            <Plus className="size-5" />
+          </button>
+          <button
+            onClick={() => setFiltersOpen(true)}
+            aria-label={t("library.filters")}
+            className="relative flex size-9 items-center justify-center rounded-full bg-surface text-muted active:scale-90"
+          >
+            <SlidersHorizontal className="size-4" />
+            {(selectedTags.length > 0 || q.trim()) && (
+              <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-accent ring-2 ring-bg" />
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Search: ✨ Найти в сохранёнках — слот под будущий AI Search */}
+      <div className="px-5 pb-3">
+        <div className="flex items-center gap-2.5 rounded-2xl bg-surface px-4 py-3 ring-1 ring-white/5">
+          <Search className="size-[18px] shrink-0 text-muted" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder={t("library.searchPlaceholder")}
+            placeholder={t("library.searchAiPlaceholder")}
             className="w-full bg-transparent text-sm text-text placeholder:text-muted focus:outline-none"
           />
-          {q && (
+          {q ? (
             <button onClick={() => setQ("")} aria-label={t("library.clear")}>
               <X className="size-4 text-muted" />
             </button>
+          ) : (
+            <span className="flex items-center gap-1 rounded-full bg-accent/15 px-2 py-1 text-[11px] font-semibold text-accent">
+              <Sparkles className="size-3" /> AI
+            </span>
           )}
         </div>
-        <button
-          onClick={refresh}
-          aria-label={t("library.refresh")}
-          className="flex size-9 items-center justify-center rounded-full bg-surface text-muted active:scale-90"
-        >
-          <RefreshCw className="size-4" />
-        </button>
-        <button
-          onClick={() => setFiltersOpen(true)}
-          aria-label={t("library.filters")}
-          className="relative flex size-9 items-center justify-center rounded-full bg-surface text-muted active:scale-90"
-        >
-          <SlidersHorizontal className="size-4" />
-          {(selectedTags.length > 0 || q.trim()) && (
-            <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-accent ring-2 ring-bg" />
-          )}
-        </button>
       </div>
 
-      {/* Folder chips: Все + папки + несортированное + создать */}
-      <div className="flex items-center gap-1.5 overflow-x-auto px-5 py-1.5 hide-scrollbar">
-        <button
-          onClick={() => {
-            telegram?.haptic.selection();
-            setFolderId(null);
-          }}
-          className={`flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
-            folderId === null
-              ? "bg-accent text-accent-text"
-              : "bg-surface text-muted hover:text-text"
-          }`}
-        >
-          <span>{t("library.chip.all")}</span>
-          <span className="opacity-60">
-            {tab === "archive" ? tabCounts.archived : tab === "later" ? tabCounts.readLater : tabCounts.inDeck}
-          </span>
-        </button>
-        {activeFolders.map((f) => (
+      {/* Папки — главный объект библиотеки (грид, не горизонтальные чипы) */}
+      {folderId === null && !q.trim() && selectedTags.length === 0 && (
+        <div className="px-5 pb-2">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
+              {t("library.section.folders")}
+            </h2>
+            <button
+              onClick={() => {
+                // Все сохранёнки → снимает фильтр папки, показывает полный список
+                telegram?.haptic.selection();
+                setFolderId(null);
+              }}
+              className="text-xs font-medium text-accent"
+            >
+              {t("library.allSaves")} →
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            {/* Системная папка Неразобранное — всегда первая */}
+            <button
+              onClick={() => {
+                telegram?.haptic.selection();
+                setFolderId("unsorted");
+              }}
+              className="flex flex-col gap-2 rounded-2xl border bg-surface p-4 text-left transition-colors hover:bg-line active:scale-[0.98] border-amber-500/20"
+            >
+              <span className="text-2xl">📥</span>
+              <span className="text-sm font-semibold text-text">{t("library.chip.unsorted")}</span>
+              <span className="text-xs text-muted">{unsortedCount} {tp("words.save", unsortedCount)}</span>
+              {unsortedCount > 0 && (
+                <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-1 text-[11px] font-medium text-amber-400">
+                  <Sparkles className="size-3" /> {t("library.unsortedAction")}
+                </span>
+              )}
+            </button>
+
+            {folders.map((f) => (
+              <button
+                key={f.id}
+                onClick={() => {
+                  telegram?.haptic.selection();
+                  setFolderId(f.id);
+                }}
+                className="flex flex-col gap-2 rounded-2xl bg-surface p-4 text-left transition-colors hover:bg-line active:scale-[0.98] group"
+              >
+                <span className="text-2xl">{f.emoji || "📁"}</span>
+                <span className="truncate text-sm font-semibold text-text">{f.name}</span>
+                <span className="text-xs text-muted">{f.count} {tp("words.save", f.count)}</span>
+              </button>
+            ))}
+          </div>
+
+          {folders.length === 0 && unsortedCount === 0 && (
+            <p className="mt-3 text-center text-xs text-muted">{t("library.noFoldersHint")}</p>
+          )}
+        </div>
+      )}
+
+      {/* Когда выбрана папка — компактный хедер фильтра с кнопкой Назад */}
+      {folderId !== null && (
+        <div className="flex items-center gap-2 px-5 py-1">
           <button
-            key={f.id}
             onClick={() => {
               telegram?.haptic.selection();
-              setFolderId(folderId === f.id ? null : f.id);
+              setFolderId(null);
             }}
-            className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
-              folderId === f.id
-                ? "bg-accent text-accent-text"
-                : "bg-surface text-muted hover:text-text"
-            }`}
+            className="flex items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-xs font-medium text-text"
           >
-            <span>{f.emoji || "📁"}</span>
-            <span>{f.name}</span>
-            <span className="opacity-60">{f.count}</span>
-            {folderId === f.id && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDeleteOpen(f.id);
-                }}
-                aria-label={t("library.deleteFolder")}
-                className="ml-0.5 flex size-4 items-center justify-center rounded-full hover:bg-black/20"
-              >
-                <X className="size-3" />
-              </button>
-            )}
+            ← {t("common.back")}
           </button>
-        ))}
-        <button
-          onClick={() => {
-            telegram?.haptic.selection();
-            setFolderId(folderId === "unsorted" ? null : "unsorted");
-          }}
-          className={`flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
-            folderId === "unsorted"
-              ? "bg-accent text-accent-text"
-              : "bg-surface text-muted hover:text-text"
-          }`}
-        >
-          <Sparkles className="size-3.5" />
-          <span>{t("library.chip.unsorted")}</span>
-          <span className="opacity-60">{unsortedCount}</span>
-        </button>
-        <button
-          onClick={() => setCreateOpen(true)}
-          aria-label={t("library.createFolder")}
-          className="flex size-7 shrink-0 items-center justify-center rounded-full bg-surface text-muted transition-colors hover:text-text active:scale-90"
-        >
-          <Plus className="size-4" />
-        </button>
-        {selectMode && (
+          <span className="truncate text-sm font-semibold text-text">
+            {folderId === "unsorted"
+              ? t("library.chip.unsorted")
+              : folders.find((f) => f.id === folderId)?.name || t("folder.pickerTitle")}
+          </span>
+          <span className="text-xs text-muted">
+            {folderId === "unsorted"
+              ? unsortedCount
+              : folders.find((f) => f.id === folderId)?.count ?? 0}
+          </span>
+          {folderId !== "unsorted" && (
+            <button
+              onClick={() => setDeleteOpen(folderId)}
+              aria-label={t("library.deleteFolder")}
+              className="ml-auto flex size-7 items-center justify-center rounded-full bg-surface text-muted hover:text-danger"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Режим выбора — компактно */}
+      {selectMode && (
+        <div className="flex items-center gap-2 px-5 py-1">
           <button
             onClick={exitSelect}
-            aria-label={t("library.exitSelect")}
-            className="flex shrink-0 items-center gap-1 rounded-full bg-accent px-3 py-1.5 text-xs font-semibold text-accent-text"
+            className="flex items-center gap-1 rounded-full bg-accent px-3 py-1.5 text-xs font-semibold text-accent-text"
           >
             <CheckCheck className="size-3.5" />
             {t("library.doneCount", { count: selectedIds.size })}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Автосортировка — баннер только при unsorted > 0 */}
       {unsortedCount > 0 && folderId !== "unsorted" && (
@@ -612,32 +649,7 @@ export function Library({
         </div>
       )}
 
-      {/* Segment tabs со счётчиками */}
-      <div className="px-5 py-1.5">
-        <div className="flex items-center rounded-xl bg-surface p-1">
-          {tabs.map((tabOpt) => (
-            <button
-              key={tabOpt.key}
-              onClick={() => {
-                telegram?.haptic.selection();
-                setTab(tabOpt.key);
-              }}
-              className={`flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-2 text-sm font-medium transition-colors ${
-                tab === tabOpt.key ? "bg-accent text-accent-text" : "text-muted hover:text-text"
-              }`}
-            >
-              <span>{tabOpt.label}</span>
-              <span className={`text-xs ${tab === tabOpt.key ? "opacity-70" : "opacity-60"}`}>
-                {tabOpt.key === "archive"
-                  ? tabCounts.archived
-                  : tabOpt.key === "later"
-                    ? tabCounts.readLater
-                    : tabCounts.inDeck}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Убран дубль-табов «Разобрать/Потом/Архив» — нижняя навигация уже есть (spec §8). Библиотека теперь фильтр по папкам, а не по статусу. */}
 
       {/* Фильтры в sheet */}
       <AnimatePresence>
@@ -855,6 +867,68 @@ export function Library({
                       : t("library.empty.defaultHint")}
             </p>
           </div>
+        ) : folderId === null && !q.trim() && selectedTags.length === 0 ? (
+          /* Обзор библиотеки: папки уже выше, тут — Все сохранёнки → + Недавние (spec §2, §11) */
+          <div className="flex-1 overflow-y-auto hide-scrollbar">
+            <div className="px-5 py-2 flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
+                {t("library.recent")}
+              </h3>
+              <span className="text-xs text-muted">{bookmarks.length} {tp("words.save", bookmarks.length)}</span>
+            </div>
+            {bookmarks.length > 0 ? (
+              <div className="px-4 pb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                {bookmarks.slice(0, 6).map((b) => (
+                  <button
+                    key={b.id}
+                    onClick={() => {
+                      telegram?.haptic.selection();
+                      setDetailBookmark(b);
+                    }}
+                    className="flex flex-col overflow-hidden rounded-2xl bg-surface text-left transition-colors hover:bg-line active:scale-[0.98]"
+                  >
+                    <div className="relative aspect-[16/10] w-full overflow-hidden bg-bg">
+                      {thumbFor(b) ? (
+                        <img
+                          src={thumbFor(b) as string}
+                          alt=""
+                          className="size-full object-cover"
+                          onError={(e) => { e.currentTarget.style.display = "none"; }}
+                        />
+                      ) : (
+                        <div className="flex size-full items-center justify-center text-3xl">
+                          {typeEmoji(b)}
+                        </div>
+                      )}
+                      <MetaStatusDot bookmark={b} />
+                    </div>
+                    <div className="flex flex-col gap-1.5 p-3">
+                      <p className="line-clamp-2 text-sm font-semibold leading-snug text-text">{b.title}</p>
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                        {b.folders && b.folders.length > 0 ? (
+                          <span className="rounded-full bg-bg px-2 py-1 text-xs text-muted">
+                            {b.folders[0].emoji || "📁"} {b.folders[0].name}
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-amber-500/15 px-2 py-1 text-xs text-amber-400">📥 {t("library.chip.unsorted")}</span>
+                        )}
+                        {b.tags?.slice(0, 2).map((tag) => (
+                          <span key={tag.id} className="text-accent">#{tag.name}</span>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-muted">
+                        <SourceBadge bookmark={b} />
+                        <span>·</span>
+                        <span>{fmtReadMinutes(b.readTimeMin, lang) || fmtDuration(b.durationSeconds) || fmtDate(b.createdAt, lang)}</span>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="px-5 py-4 text-sm text-muted text-center">{t("library.empty.defaultHint")}</p>
+            )}
+          </div>
         ) : (
           <div className="flex-1 overflow-y-auto p-4 hide-scrollbar">
             {groupByPeriod(bookmarks, {
@@ -877,6 +951,10 @@ export function Library({
                       onPointerLeave={cancelLongPress}
                       onClick={() => {
                         if (selectMode) toggleSelect(b.id);
+                        else {
+                          telegram?.haptic.selection();
+                          setDetailBookmark(b);
+                        }
                       }}
                       className={`group relative flex items-center gap-3 rounded-xl bg-surface p-3 transition-colors hover:bg-line ${
                         selectMode
@@ -970,7 +1048,7 @@ export function Library({
                               )}
                             </span>
                             <button
-                              onClick={() => void acceptAi(b)}
+                              onClick={(e) => { e.stopPropagation(); void acceptAi(b); }}
                               aria-label={t("library.acceptAi")}
                               title={t("library.accept")}
                               className="flex size-5 items-center justify-center rounded-full bg-success/20 text-success active:scale-90"
@@ -978,7 +1056,7 @@ export function Library({
                               <Check className="size-3" />
                             </button>
                             <button
-                              onClick={() => void dismissAi(b)}
+                              onClick={(e) => { e.stopPropagation(); void dismissAi(b); }}
                               aria-label={t("library.rejectAi")}
                               title={t("library.reject")}
                               className="flex size-5 items-center justify-center rounded-full bg-bg text-muted active:scale-90"
@@ -1017,7 +1095,8 @@ export function Library({
                         )}
                         {!selectMode && (
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               telegram?.haptic.selection();
                               setFolderMenuCard(b);
                               setPickerOpen(true);
@@ -1031,7 +1110,8 @@ export function Library({
                         )}
                         {!selectMode && (
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               telegram?.haptic.selection();
                               setTagMenuCard(b);
                               setTagPickerOpen(true);
@@ -1045,7 +1125,8 @@ export function Library({
                         )}
                         {!selectMode && (
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               telegram?.haptic.impact("medium");
                               onOpen(b);
                             }}
@@ -1132,6 +1213,20 @@ export function Library({
             onClose={() => {
               setTagPickerOpen(false);
               setTagMenuCard(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Material detail — тап по карточке → просмотр (spec §5) */}
+      <AnimatePresence>
+        {detailBookmark && (
+          <MaterialSheet
+            bookmark={detailBookmark}
+            onClose={() => setDetailBookmark(null)}
+            onOpen={(b) => {
+              setDetailBookmark(null);
+              onOpen(b);
             }}
           />
         )}

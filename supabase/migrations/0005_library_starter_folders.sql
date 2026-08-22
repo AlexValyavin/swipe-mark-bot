@@ -1,0 +1,14 @@
+-- P1.5 — Library redesign: starter folders seeded lazily in code
+-- No DDL needed (folders table exists). This file documents the 8 starter folders
+-- and the lazy-seed helper `ensureStarterFolders()` in src/lib/db/folders.ts.
+-- Apply manually if you want to pre-seed existing users (optional):
+
+-- Optional backfill for users with 0 folders (idempotent, safe to run repeatedly):
+-- insert into public.folders (user_id, name, emoji, sort_order)
+-- select p.id, f.name, f.emoji, f.sort_order
+-- from public.profiles p
+-- cross join (values
+--   ('🧠','Нейросети',0), ('💼','Работа',1), ('📚','Обучение',2), ('💡','Проекты',3),
+--   ('💰','Финансы',4), ('🎬','Развлечения',5), ('🏠','Жизнь',6), ('🌿','Лайфстайл',7)
+-- ) as f(emoji,name,sort_order)
+-- where not exists (select 1 from public.folders where user_id = p.id);

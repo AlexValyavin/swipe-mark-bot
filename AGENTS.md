@@ -8,99 +8,61 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-# SwipeMark — Telegram Mini App
+# SwipeMarkBot — Telegram Mini App (swipe deck for saved bookmarks)
 
-Mini App where users swipe through saved bookmarks. UI copy is Russian (`<html lang="ru">`). Backend is Next.js API routes + Supabase (Postgres, service-role only from server). Firebase (Firestore) remains as legacy read-only during migration; one-off migration lives in `scripts/migrate-firestore.ts`.
+Russian UI (`<html lang="ru">`). Next.js 16.3 App Router + Supabase Postgres (service-role only from server). Firebase is legacy read-only, used only by `scripts/migrate-firestore.ts`.
+
+## Layout
+
+- `src/app/` — App Router pages + `src/app/api/*` routes. `@/*` → `src/*` (`tsconfig.json` paths).
+- `src/components/` — client components (`BookmarkCard`, `Library`, `SwipeDeck`, etc.).
+- `src/lib/db/` — **only place with Supabase queries** (`supabase.ts` service-role client, `types.ts` rows, `mappers.ts` `cardToBookmark()`). Other repos: `cards`, `folders`, `tags`, `swipes`, `settings`, `pairing`, `jobs`, `media`, `meta`.
+- `src/lib/ai/` — `adapter.ts` (openrouter/mistral/openai/custom, 8s timeout) + `enrich.ts` (`buildPrompt`, `parseAiJson`, `enrichCard`); keys encrypted via `src/lib/crypto.ts` (AES-256-GCM `enc:v1:…`, derived from `AI_KEY_SECRET`).
+- `src/lib/meta/` — parsers per provider (`youtube/instagram/tiktok/twitter/telegram/generic`) + `cache.ts` (7-day `meta_cache`) + `enrich.ts` (`enrichCardMeta`).
+- `supabase/migrations/*.sql` — `0001_reliability` … `0004_language`; applied **manually in Supabase SQL Editor** (DDL fails via PostgREST).
+- `scripts/test-*.ts` — `tsx --test` suites; `landing/` — static GitHub Pages site.
 
 ## Commands
-- `npm run dev` — dev server. Open in Telegram or use the fallback landing page (rendered when `window.Telegram.WebApp` is absent).
-- `npm run lint` — ESLint only; there is no typecheck or test script. Typecheck manually with `npx tsc --noEmit`. Mapping unit tests: `npx tsx --test scripts/test-mappers.ts`. AI-enrich parsing tests: `npx tsx --test scripts/test-enrich.ts`. Pairing code tests: `npx tsx --test scripts/test-pairing.ts`. URL-normalization tests: `npx tsx --test scripts/test-preview.ts`. Meta-parser tests: `npx tsx --test scripts/test-parsers.ts`. Network-free parser tests: `npx tsx --test scripts/test-meta-parsers.ts`.
 
-## Data flow
-1. User sends a link/photo/video/forward to @SwipeMarkBot → Telegram POSTs to `/api/webhook` → profile is resolved via `getOrCreateProfileByTelegramId`, card saved to Supabase `cards` (single row per message), media into `attachments`, URLs into `card_links`. Albums (`media_group_id`) are merged into one card by lookups on `media_group_id + user_id` (`findCardIdByMediaGroup`) and append to `attachments`; the last photo's caption is applied. Forwards store `source_type='forwarded'`, `source_chat_id`, `source_message_id` and `source_url` (`https://t.me/<username>/<messageId>` for public, `https://t.me/c/<id>/<messageId>` for private chats). Title is derived via `deriveTitle`: first meaningful text line → caption → auto-label (`Фото`/`Видео`/`Документ`/`Ссылка`/`Сохранённое сообщение`), capped at 120 chars. Media is served through `/api/file` (accepts `?fileId=` resolved via getFile, or the legacy `?path=`), so the bot token never reaches the client.
-2. Mini App (`src/app/page.tsx`) fetches `GET /api/bookmarks` (user resolved from the session cookie) and renders the swipe deck (`SwipeDeck` → `BookmarkCard`). Card statuses (`new`/`later`/`archived`/`done`, plus `deferUntil`) live on the card row; the frontend filters the deck (new + later whose `deferUntil` has passed) and the archive (`archived`). Swipes/opens post to `POST /api/actions` (`left`→archived, `right`→counted via `swipe_actions`, 5th right-swipe archives the card, `done`, `open`=log, `undo`→restore `previous_status`) with a unique idempotency key per gesture; actions are logged in the `swipe_actions` table. On the frontend a right-swipe moves the card to the bottom of the deck (it returns after you cycle through the rest) unless the server reports it was archived. The header shows live counts for the deck and archive; the archive tab has an "Очистка архива" TTL selector (`GET/POST /api/settings`, `archiveTtlHours` 24/168/720/null, stored in `user_settings`), and `GET /api/bookmarks` auto-deletes archived cards older than the TTL.
-3. `/api/auth` validates Telegram `initData` (HMAC-SHA256) and sets an HTTP-only session cookie (signed with `TELEGRAM_BOT_TOKEN`) holding the profile uuid; legacy `tg:<id>` cookies are accepted and translated via `profiles.telegram_id`. The frontend calls it once on startup; all other APIs (`/api/bookmarks`) read the user from that session (or a Supabase Auth Bearer token) and return 401 without it.
+```bash
+npm run dev          # Next dev; open in Telegram or fallback landing
+npm run build        # next build --webpack
+npm run lint         # ESLint only (eslint.config.mjs)
+npx tsc --noEmit     # typecheck (no npm script)
+```
 
-## Repositories (`src/lib/db/*`) — the only place with Supabase queries
-- `supabase.ts` — service-role client. `types.ts` — row types. `mappers.ts` — `cardToBookmark()` reconstructs the frontend `Bookmark` contract from relational rows (type/sourceType/status maps, `/api/file?fileId=` URLs, `forwardUrl` from `source_url`, optional `folders` meta).
-- `cards.ts` — list/get/create/update media-group lookup, archived TTL deletes, `listForLibrary()` (statuses/folder/search/sort/cursor). `settings.ts` — `archive_ttl_hours`. `swipes.ts` — idempotency check, action logging, right-swipe counting. `folders.ts` — folder CRUD + counts + `setCardFolders` (scope-checked). `tags.ts` — `findOrCreateTag` (lower+trim+схлоп пробелов), `listTagsByUser` (join card_tags, топ-50 по частоте), `addCardTags` (upsert + связи), `setCardTags` (полная замена связей + чистка осиротевших тегов), `removeCardTag`, `getTagsForCardIds`. `pairing.ts` — future stage (pairing repo exists).
-- `cards.ts` — list/get/create/update media-group lookup, archived TTL deletes, `listForLibrary()` (statuses/folder/tags/search/sort/cursor; поиск и по имени тега). 
-- `settings.ts` — `archive_ttl_hours`.
-- `swipes.ts` — idempotency check, action logging, right-swipe counting.
-- `folders.ts` — folder CRUD + counts + `setCardFolders` (scope-checked).
-- `tags.ts` — bucket: `.findOrCreateTag` (`lower+trim+схлоп пробелов`, race-safe 23505), `.listTagsByUser` (join `card_tags`, топ-50 по частоте), `.addCardTags` (upsert+sвязи), `.setCardTags` (замена связей + чистка orphan), `.removeCardTag`, `.getTagsForCardIds`.
-- `pairing.ts` — future stage (tag/pairing repos exist).
+Tests (no single `npm test`; run individually):
+```bash
+npm run test:mappers       # scripts/test-mappers.ts
+npm run test:crypto        # scripts/test-crypto.ts
+npx tsx --test scripts/test-enrich.ts
+npx tsx --test scripts/test-pairing.ts
+npx tsx --test scripts/test-preview.ts   # normalizeUrl
+npx tsx --test scripts/test-parsers.ts
+npx tsx --test scripts/test-meta-parsers.ts
+npx tsx --test scripts/test-format.ts
+```
 
-## AI (BYOK, этап 3)
-- `src/lib/crypto.ts` — AES-256-GCM шифрование ключей: формат `enc:v1:<iv>:<tag>:<ct>` (base64url), ключ выводится из `AI_KEY_SECRET` через SHA-256, `maskKey()` только последние 4 символа.
-- `src/lib/ai/adapter.ts` — единый chat-completions адаптер: openrouter/mistral/openai/custom base url, timeout 8с, ошибки `AiError {kind: auth|rate|timeout|network|parse}`, дефолт-модели на провайдер.
-- API: `GET/PUT /api/settings/ai` (zod-валидация, возвращает `{provider, model, mode, hasKey, keyMask, customBaseUrl}`, ключ никогда не отдаётся открытым), `POST /api/settings/ai/test` (rate limit 5/мин in-memory, `{ok, model, latencyMs, error?}`).
-- `src/lib/db/settings.ts` — `getAiSettings`/`upsertAiSettings` (user_settings: ai_provider/ai_key_enc/ai_model/ai_custom_base_url/ai_mode).
-- UI: `src/components/AiSettings.tsx` — вкладка «Настройки» в `page.tsx` (селект провайдера, ключ password+👁 + Удалить, модель авто/вручную с загрузкой списка, Проверить, тумблер off/suggest/auto). Custom base URL без протокола нормализуется в `http://` (порт — часть URL, напр. `localhost:11434`).
-- Этап 4 (AI-распределение): `src/lib/ai/enrich.ts` — `buildPrompt` (только существующие папки), `parseAiJson` (извлекает первый `{…}`, fallback при мусоре), `normalizeFolderName` (срезает эмодзи-префикс `💼 win`→`win` — модель копирует эмодзи из промпта), `enrichCard` (устанавливает ai_status processing→done/failed, никогда не роняет карточку), `acceptSuggestion`/`dismissSuggestion`. Вызывается из `/api/webhook` через `after()` (фоново, после ответа Telegram). Роуты: `POST /api/cards/[id]/ai-accept` (`kind: folder|tags|all`), `POST /api/cards/[id]/ai-dismiss`, `POST /api/cards/bulk-ai` (`{scope:'unsorted'}` или `{cardIds}` ≤30 → jobId, асинхронно через `after()`, чанки по 5, прогресс в `bulk_jobs`), `GET /api/cards/bulk-ai/[jobId]` (статус, owner-scoped), `POST /api/cards/bulk-ai/[jobId]/cancel` (отмена между чанками). `src/lib/db/jobs.ts` — CRUD `bulk_jobs` (total/done/failed/status running|done|error|cancelled). Фильтр `folderId=unsorted` в `GET /api/library` (карточки без card_folders, статусы new/later); счётчик unsorted считается в коде (RPC `counts` может отсутствовать/врать). AI-поля в `Bookmark`: `aiStatus/aiTitle/aiSummary/aiFolderId/aiFolderName/aiConfidence` (`aiFolderName` резолвится через `loadAiFolderNames`, т.к. подсказка не в card_folders); чип `AI: <папка> [✓][✎]` в Library (активные кнопки) и пассивный бейдж в deck (`BookmarkCard`).
-- Тесты: `npm run test:crypto` (roundtrip, маскирование, тампер-детект); `npx tsx --test scripts/test-enrich.ts` (парсинг JSON, клэмп confidence, обрезка тегов/тайтла, no-JSON throw).
+## Env (`.env.local`, never committed — see `.env.example`)
 
-## Frontend
-- Tabs: «Входящие» (swipe deck), «Библиотека» (`Library.tsx` — search, folder chips + counts + tag filter «Теги ▾» (мультивыбор OR), tabs В колоде/Позже/Архив, create/delete folder modals, folder picker, tag picker с чипами/инпут/автокомплит, чипы тегов на карточке (≤3)), «Архив».
-- Library API: `GET /api/library` (`tab`, `folderId`, `q`, `tags=a,b`, `sort`, `cursor`), `GET /api/tags` (`q`), `POST /api/cards/[id]/tags` (`names`), `DELETE /api/cards/[id]/tags/[tagId]`, `GET/POST /api/folders`, `PATCH/DELETE /api/folders/[id]`, `POST /api/cards/[id]/folders`.
+`TELEGRAM_BOT_TOKEN` (webhook HMAC + auth), `BOT_USERNAME` + `NEXT_PUBLIC_BOT_USERNAME` (pairing `t.me/<bot>?start=<code>`), `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_ANON_KEY`, `AI_KEY_SECRET`, `OPENROUTER_API_KEY` + `AI_MODEL` (default `deepseek/deepseek-v4-flash-0731`), `OWNER_TELEGRAM_ID` (owner-only `GET /api/settings/diagnostics`), `POSTHOG_*` / `NEXT_PUBLIC_POSTHOG_*`, `FIREBASE_SERVICE_ACCOUNT_KEY` (inline JSON, only for migration).
 
-## Pairing (этап 5)
-- `src/lib/db/pairing.ts` — `generateCode()` (безопасный алфавит без O/0/I/1, 8 символов), `generatePairingCode` (инвалидирует старые, TTL 10 мин), `consumePairingCode` (null при невалидном/просроченном/использованном), `linkTelegram` (scope-check: TG не должен быть у другого профиля → 23505), `unlinkTelegram`.
-- API: `POST /api/pairing/generate` → `{code, expiresAt, deepLink, qr}` (deepLink = `https://t.me/<BOT_USERNAME>?start=<code>`), `GET /api/pairing/status` → `{linked, telegramUsername, linkedAt, code, expiresAt}` (активный код, если есть), `POST /api/pairing/unlink`.
-- Бот: `/start <code>` в `/api/webhook` → проверки (нет кода / недействителен / уже привязан у себя / 23505 занят другим) → `profiles.telegram_id` + `markCodeUsed`; `/unlink` → очистка. Ответы через Telegram sendMessage (дружелюбные).
-- UI: `src/components/PairingSettings.tsx` вверху вкладки «Настройки» — не привязан (кнопка + код + копировать + открыть TG + QR `qrcode.react` + таймер TTL + polling 3 с) / привязан (@username, дата, Отвязать). Env: `BOT_USERNAME` (сервер) и `NEXT_PUBLIC_BOT_USERNAME` (клиент для QR/deep link).
+## Data flow (minimal)
 
-## Полировка (этап 6)
-- API: `GET /api/counts` → `{inDeck, readLater, archived, unsorted}` (считается в коде — RPC `counts` в проде отсутствует, PGRST202; дедуп unsorted = в колоде минус карточки в card_folders). `POST /api/cards/preview` `{input}` → `{links: [{url, type, duplicate}]}` (нормализация через `normalizeUrl()` в cards.ts — lowercase host, www., utm/fbclid/gclid/igsh/igshid, hash, trailing slash; дедуп по canonical_url + card_links). `POST /api/cards/bulk` `{cardIds, action: toFolder|addTag|archive|toDeck|delete, payload?}` → `{processed, failed, failedIds}` (атомарно по карточке; toFolder проверяет владение папкой, delete чистит attachments/card_links/card_folders/card_tags/swipe_actions). `POST /api/cards` `{urls}` → создаёт карточки link-типа с canonical_url, пропускает дубли, кикает AI-enrich через `after()`. `GET /api/deck?folderId=&limit=` — RPC `deck(uid, folder, tag, lim)` (в проде сигнатура `(folder, lim, tag, uid)`, работает по именам параметров).
-- UI: бейджи нижнего меню (Входящие = `counts.inDeck`, Библиотека = `counts.unsorted`); кнопка «Добавить» в хедере → `AddModal.tsx` (preview-дедуп: «Найдено ссылок: N», дубли ⚠️, «Сохранить (X новых, Y дублей)»); контекстные empty states (поиск/теги/папка/архив); массовый режим в Library (long-press 350мс → чекбоксы → панель [В папку][Тег][В архив][В колоду][Распределить→bulk-ai][Удалить], «Выбрать все/Готово · N»); кнопка «Разобрать эту папку» (активна при выбранной папке) → `GET /api/deck?folderId=` + шапка «Папка: X · N» в табе Входящие; подсказка жестов скрывается после 10 свайпов (`localStorage "swipe-count"`, не в user_settings — колонки нет).
-- Тесты: `scripts/test-preview.ts` (normalizeUrl: utm/hash/www/trailing-slash/instagram-igsh).
+1. **Ingest** `POST /api/webhook` (Telegram) → `getOrCreateProfileByTelegramId` → `cards` (+ `attachments`/`card_links`). Albums merged by `media_group_id` (`findCardIdByMediaGroup`); forwards keep `source_type='forwarded'` + `source_url` (`t.me/<user>/<id>` or `t.me/c/<id>/<id>`). Title via `deriveTitle` (≤120 chars). Media served via `GET /api/file?fileId=` (via `getFile`), not raw `file_path`.
+2. **Auth** `POST /api/auth` validates `initData` HMAC, sets http-only cookie (signed with `TELEGRAM_BOT_TOKEN`); legacy `tg:<id>` cookie translated via `profiles.telegram_id`. All `GET /api/bookmarks` etc. require session or Supabase Bearer token (401 otherwise).
+3. **Deck** `GET /api/bookmarks` + `GET /api/deck?folderId=&limit=` → `SwipeDeck`/`BookmarkCard`. Statuses `new/later/archived/done` (+ `deferUntil`); deck = `new` + `later` past defer; `POST /api/actions` (`left`→archived, `right`→`swipe_actions` count, 5th right→archived, `done/open/undo`) with idempotency key. Archive TTL (`user_settings.archive_ttl_hours` 24/168/720/null) purged on `GET /api/bookmarks`.
+4. **Library/Folders/Tags** `GET /api/library?tab=&folderId=&q=&tags=&sort=&cursor=` (incl. `folderId=unsorted` = no `card_folders`; `unsorted` count computed in code, not RPC), `GET/POST /api/folders`, `POST /api/cards/[id]/folders`, `GET /api/tags`, `POST/DELETE /api/cards/[id]/tags`.
+5. **AI** `GET/PUT /api/settings/ai` + `POST /api/settings/ai/test` (5/min in-memory limit); `enrichCard` called via `after()` from webhook; `POST /api/cards/[id]/ai-accept|ai-dismiss`, `POST /api/cards/bulk-ai` (→ `bulk_jobs`, chunks of 5, `GET/POST /api/cards/bulk-ai/[jobId]` + `/cancel`), `POST /api/cards/[id]/summary`.
 
-## Фаза R — надёжность (Шаги 0–4 готов)
-- SQL-миграции: `supabase/migrations/0001_reliability.sql` (применяется вручную в SQL Editor — DDL не проходит через PostgREST). Поля: `cards.meta_status` (`pending|processing|done|failed`, default pending) + `cards.meta_error`; `attachments.storage_url`; таблица `meta_cache` (PK = sha256(canonical_url), jsonb `data`, RLS без политик — только service_role).
-- `src/lib/db/meta.ts` — `setCardMetaStatus` (ошибки нормализуются к `timeout|403|parse|network`), `listFailedCards(20)`.
-- `GET /api/settings/diagnostics` — только владелец (`OWNER_TELEGRAM_ID` env, сравнение по `profiles.telegram_id`), последние 20 failed: `{id, url, error, createdAt}`.
-- `POST /api/cards/[id]/refetch` — реальный парсинг (см. Шаг 2).
-- UI: `src/components/DiagnosticsSettings.tsx` в табе «Настройки» (скрыт для не-владельца): «Сбоев нет» / список failed с ошибкой+временем / [Повторить].
-- Шаг 1 (медиа-кэш): `src/lib/db/media.ts` — `ensureMediaBucket()` (идемпотентный public бакет `swipemark-media`), `cacheCardMedia(userId, cardId)` (photo → само фото, video/animation/document → thumbnail; download ≤8МБ/10с из Telegram → upload `u/{userId}/{attachmentId}.jpg` → `attachments.storage_url`; без тела видео). Запускается из webhook через `after()` (`kickMediaCache` рядом с `kickEnrich`). `meta_status=done` при полном кэше, `failed` при полном сбое.
-- Шаг 2 (парсеры): `src/lib/meta/parsers/` — `index.ts` (`providerForUrl`/`parseUrl`, возвращает `{provider, meta|null}`), `shared.ts` (`ParsedMeta{title,description,image_url,duration_seconds,author}`, `parseMetaTags` (og/twitter/`<title>`), `fetchHtml` (браузерный UA, 5с, 1 ретрай, возвращает HTML даже при 403 — там бывают og-теги), `BROWSER_UA`), youtube.ts (превью гарантированно `https://i.ytimg.com/vi/{videoId}/hqdefault.jpg`, oEmbed title/author, `"lengthSeconds"`-regex, og:description, JSON-фолбэк `ytInitialPlayerResponse.videoDetails` для title/lengthSeconds/shortDescription; серверный IP YouTube отдаёт «видео недоступно» без og у регион-заблокированных видео), instagram.ts (UA `facebookexternalhit/1.1`, фолбэк «Instagram • @username» из URL), tiktok.ts (oEmbed), twitter.ts (`publish.twitter.com/oembed`, author + текст как title ≤120), telegram.ts (`t.me/s/{channel}/{id}`), generic.ts (og+twitter+`<title>`).
-- Шаг 2 (кэш и обогащение): `src/lib/meta/cache.ts` — `meta_cache` (PK sha256 canonical_url, TTL 7д, ленивый prune при записи), `getMetaFromCache`/`putMetaToCache`. `src/lib/meta/enrich.ts` — `enrichCardMeta(userId, cardId)`: canonical_url→кэш→сеть→`applyMeta` (og_* в `card_links`, дубль в `card.title/image_url/duration_seconds` если пустые)→`meta_status=done|failed`. Вызывается из webhook `after()` (`kickMetaEnrich` + авто-ретрай failed через ~60с) и из `POST /api/cards` (фоново через `after()`). `refetch` — реальный парсинг. `meta_cache` доступна только service_role (RLS без политик).
-- `/api/file`: `?storageUrl=` → 302; иначе прокси ТОЛЬКО photo (ext в jpg/jpeg/png/webp/gif/heic, timeout 8с, `Cache-Control: public, max-age=31536000, immutable`); video/document/audio/неизвестный ext → 404 `{reason}`.
-- Маппер (`mappers.ts`): mediaItems.imageUrl приоритетно из `storage_url`, иначе `/api/file?fileId=` (фото — telegram_file_id, видео — thumbnail_file_id); `videoUrl` больше не заполняется для видео (не проксируем), `durationSeconds` из `attachments.duration`. `getOpenTarget` для forward открывает forwardUrl/url, для видео — url/источник.
-- UI (`BookmarkCard`): `isVideo` по типу (не по videoUrl), бейдж длительности `mm:ss`, onError-цепочка `storage_url → /api/file?fileId= → placeholder`.
-- Тесты Шага 2: `scripts/test-parsers.ts` (8) — parseMetaTags по фикстурам (`scripts/fixtures/`), lengthSeconds-regex, provider-роутинг, normalizeUrl-регресс. Человек-шаг: 10–15 реальных «ломавшихся» ссылок (instagram/youtube/tiktok/t.me) для ручной проверки парсеров.
-- Шаг 4 (тесты без сети): `scripts/test-meta-parsers.ts` (18) — мок `global.fetch` по подстроке URL; youtube (oEmbed title/author, превью i.ytimg.com, lengthSeconds, невалидный URL), instagram (OG + UA facebookexternalhit, фолбэк «Instagram • @username»), tiktok (oEmbed, 404→null), twitter (author + title≤120, обрезка, 404→null), telegram (og:title, фолбэк канала без сети), generic (og/twitter-title/пустая→null), parseUrl-роутинг. `scripts/test-mappers.ts` +3: metaStatus/metaError propagation. Итого 65 тестов.
-- Шаг 3 (устойчивый UI): `Bookmark.metaStatus/metaError` (маппер `mappers.ts`, `card_links` не задействован). `src/components/SourceBadge.tsx` — `sourceKind`/`sourceEmoji` (youtube/instagram/tiktok/telegram/link), `SourceBadge` (нижний левый угол карточки), `MetaStatusDot` (amber-пульс для processing, rose для failed), `FailedActions` ([Повторить]→`POST /api/cards/[id]/refetch` + [Открыть]), `CardSkeleton` (processing). BookmarkCard: скелетон при processing, бейдж источника, failed-индикатор «⚠️ Метаданные не загружены» + кнопки. Library: rose-точка на миниатюре + бейдж «⚠️ Не удалось загрузить» при failed. Свайп-deck передаёт `onRetry` из page.tsx (`retryBookmark` → refetch → refresh).
-- Человек-шаг: в `.env.local` и Vercel вернуть прод-значения `AI_KEY_SECRET`, `BOT_USERNAME` и добавить `TELEGRAM_BOT_TOKEN` (без него media-кэш не качает файлы, а webhook молчит).
+## Conventions & gotchas
 
-## UI-фаза (Шаги 1–4 готовы)
-- SQL-миграция: `supabase/migrations/0002_ui_phase.sql` (применяется вручную) — `user_settings.ui_scale` (`s|m|l`, default `m`) + таблица `bulk_jobs` (для Шага 3, RLS `user_id = auth.uid()`).
-- Дизайн-токены в `globals.css`: `@theme inline` задаёт `--fs-*` (xs 12/sm 13/base 16/title 17/summary 14/lg 18/xl 22) как `calc(Nrem * var(--ui-scale))`; `html[data-ui-scale="s|l"]` → `--ui-scale` 0.92/1.12; `body { font-size: var(--fs-base) }`; адаптив `.app-column` ≥768px → max-width 640px. Tailwind-классы `text-fs-base`, `text-fs-title` и т.п.
-- `ui_scale`: `src/lib/db/settings.ts` — `getUiScale`/`setUiScale` (upsert в user_settings), `isUiScale`. `GET/POST /api/settings` теперь отдают/принимают `uiScale`. UI: `src/components/UiScaleSettings.tsx` (вверху вкладки «Настройки» в page.tsx) — тумблер S/M/L, применяет `data-ui-scale` на `<html>` сразу, пишет в настройки.
-- Библиотека (`Library.tsx`) по ТЗ: шапка «Библиотека» + поиск + ⚙ фильтры (sheet `FiltersSheet` с тегами и бейджем активных); чипы папок «Все N / папки со счётчиками / ✨ Несортированное / +»; баннер «Автосортировать N карточек» (только при unsorted>0) → `AutosortSheet`; сегмент-табы со счётчиками (`tabCounts` из counts API); группировка Сегодня/На этой неделе/Раньше (`groupByPeriod`); карточка списка — превью 56px, title 2 строки, meta-строка (SourceBadge + `⏱ mm:ss`/`📖 ~N мин` + дата), теги ≤2, `MetaStatusDot`, кнопки ≥44px; сетка `md:grid-cols-2`. Хелперы `fmtDuration`/`fmtReadMinutes`/`fmtDate`/`groupByPeriod` в `Library.tsx`.
-- Навигация: иконки 26px, текст 12px, min-height 68px.
-- Ошибка: если `ui_scale` колонки нет в БД (миграция не применена), setUiScale кидает (проверка `error`) — GET падает к 'm'. Тесты 68 зелёных.
-- Шаг 2 (колода): `src/lib/format.ts` — `fmtDuration/fmtReadMinutes/fmtDateShort/groupByPeriod` (тесты `scripts/test-format.ts`). `readTimeMin` в маппере: `estimated_minutes` или оценка по длине описания (~200 слов/мин), 0 при отсутствии контента. BookmarkCard: заголовок `text-fs-title` 17px semibold line-clamp-3, meta `text-fs-sm`, бейджи `⏱ mm:ss` / `📖 ~N мин`; `ai_summary` 2 строки clamp; ghost-кнопка `[✨ Саммари]` → `POST /api/cards/[id]/summary` → `generateCardSummary` в `src/lib/ai/enrich.ts` (показывается только когда `/api/settings/ai` вернул hasKey && mode!='off'; скелетон при загрузке; защита от повторов). Тап по саммари → full-sheet с полным текстом (портал `createPortal(document.body)`, т.к. родитель-карточка имеет transform — fixed внутри неё не вырвется) + кнопка «Открыть» (`getOpenTarget`). Undo-тост 4с в page.tsx (`showUndoToast`/`undoLastSwipe`, POST /api/actions/undo). Immersive: после первого свайпа nav уезжает, триггер `⋯`; `navHidden` сбрасывается при смене таба. Заголовки ручных ссылок: `POST /api/cards` → `deriveTitle` — кириллический слаг читается как есть, латинский (транслит) → hostname; после обогащения `applyMeta` в `src/lib/meta/enrich.ts` перезаписывает временный title==domain на реальный `og_title`.
-- Шаг 3 (автосортировка): `src/lib/db/jobs.ts` — CRUD `bulk_jobs`. `POST /api/cards/bulk-ai` асинхронный: job → `after()` чанки по 5 → прогресс в БД → сразу `{jobId, status, total, done, failed}`; `GET /api/cards/bulk-ai/[jobId]`, `POST .../cancel` (проверка между чанками). UI: `AutosortSheet` (прогресс-бар + поллинг 2с + отмена + результат, `onDone`→load); массовый `runBulkAi` тоже поллит job.
-- Шаг 4 (fullscreen + десктоп): `TelegramProvider` расширен — `requestFullscreen/exitFullscreen/isFullscreen/onEvent`, контекст `fullscreen {supported,isFullscreen,request,exit}`, подписка на `isFullscreenChanged`. `src/components/FullscreenSettings.tsx` — тумблер в настройках (только при поддержке API), авто-восстановление из `localStorage "swipe-fullscreen"`. Десктоп: `.app-column` ≥768px → 960px; колода `md:max-w-[560px]` + `md:max-h-[min(820px,100dvh-140px)]` по центру; библиотека `md:grid-cols-2 xl:grid-cols-3`.
-
-## Env vars (`.env.local`, none committed)
-- `TELEGRAM_BOT_TOKEN` — used by the webhook and auth HMAC
-- `BOT_USERNAME` / `NEXT_PUBLIC_BOT_USERNAME` — bot username without @, used for pairing deep links (`https://t.me/<username>?start=<code>`) and QR
-- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — server DB access (service role; never exposed to client)
-- `SUPABASE_ANON_KEY` — used only server-side to verify Bearer auth tokens
-- `FIREBASE_SERVICE_ACCOUNT_KEY` — legacy, only for `scripts/migrate-firestore.ts` (inline JSON string, parsed with `JSON.parse`)
-- `OWNER_TELEGRAM_ID` — Telegram ID владельца; только ему показывается блок «Диагностика» (`/api/settings/diagnostics`)
-- (Legacy client config `NEXT_PUBLIC_FIREBASE_*` no longer used)
-
-## Gotchas
-- Every API route must keep `export const runtime = "nodejs"` — `firebase-admin`, `crypto` and Supabase fail on the edge runtime.
-- `src/lib/firebase-admin.ts` imports `server-only`; never import it from client components. Its use beyond the migration script is deprecated.
-- The `Bookmark` type is defined in and re-exported from `@/lib/db/mappers` via `@/app/api/bookmarks/route`; components import it from there.
-- The repo repos return snake_case fields typed in `src/lib/db/types.ts`; the Supabase client is untyped (no Database generic) — cast query results to the row types.
-- Migration script: idempotent via `migration_log.json` (mapping old→new ids), `--dry-run` flag, logs `processed/failed`, exits non-zero on failures.
-- Tailwind v4: no `tailwind.config` — styles are set up via `@import "tailwindcss"` in `src/app/globals.css`, which also holds Telegram theme vars and custom utilities.
-- Keep the `<!-- BEGIN/END:nextjs-agent-rules -->` block intact — `next dev` regenerates it; commit it with your changes.
-
-## Tech debt / backlog
-- **UI-фаза Шаг 5**: PWA-минимум (манифест + офлайн-оболочка).
-- **Автосортировщик для больших библиотек**: сейчас `POST /api/cards/bulk-ai {scope:'unsorted'}` ограничен 30 карточками; для больших — нужен обход лимита (порции с «продолжить» или рекурсивный запуск) + предупреждение о стоимости (N карточек = N запросов BYOK). Вариант Б: в настройках поле «кол-во папок» → ИИ предлагает N имён → создание с подтверждением пользователя (авто-создание папок сейчас запрещено намеренно) → раскладка. Хранилище: `user_settings.auto_sort_folder_count`.
+- **Every API route must have `export const runtime = "nodejs"`** — `firebase-admin`/`crypto`/Supabase fail on edge.
+- **`src/lib/firebase-admin.ts` imports `server-only`** — never from client components; only `scripts/migrate-firestore.ts` uses it now.
+- **Supabase client is untyped** (no `Database` generic) — cast to row types in `src/lib/db/types.ts`; all queries must enforce `auth.uid() = user_id` via RLS (service-role bypasses RLS, so code must scope by `user_id`).
+- **Bookmark contract** is reconstructed in `src/lib/db/mappers.ts` (`cardToBookmark()`); import `Bookmark` from `@/lib/db/mappers` or `@/app/api/bookmarks/route`, not a separate type file.
+- **Tailwind v4** — no `tailwind.config.*`; only `@import "tailwindcss"` in `src/app/globals.css` (+ theme vars, `@theme inline` scales `ui_scale` S/M/L via `html[data-ui-scale]`).
+- **Pairing codes** — `generateCode()` avoids `O/0/I/1`, 8 chars, 10-min TTL, invalidates prior; `/start <code>` and `/unlink` handled in webhook.
+- **Meta/media cache** — `meta_cache` (PK `sha256(canonical_url)`) and `attachments.storage_url` (bucket `swipemark-media`) are service-role only (RLS no policies). `/api/file?storageUrl=` → 302; otherwise proxies only `photo` (known image exts), else 404.
+- **Landing deploy** — `landing/**` push to `main` triggers `.github/workflows/deploy-landing.yml` (GitHub Pages `actions/deploy-pages@v4`). No build step; static files only.
+- **Keep `<!-- BEGIN/END:nextjs-agent-rules -->`** committed — `next dev` regenerates it.
