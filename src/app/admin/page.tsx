@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Trash2, LogOut, Check, Loader2 } from "lucide-react";
 
 type AiProvider = "openrouter" | "mistral" | "openai" | "custom";
 
@@ -26,11 +27,14 @@ export default function AdminPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [models, setModels] = useState<string[] | null>(null);
   const [modelsLoading, setModelsLoading] = useState(false);
+  const [testLoading, setTestLoading] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
 
   // users list minimal
   const [q, setQ] = useState("");
   const [users, setUsers] = useState<any[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadAi = async () => {
     setAiLoading(true);
@@ -63,6 +67,26 @@ export default function AdminPage() {
     finally { setModelsLoading(false); }
   };
 
+  const testAi = async () => {
+    if (!ai?.hasKey) { setMsg("Сначала сохраните ключ"); return; }
+    setTestLoading(true);
+    setTestResult(null);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/admin/ai/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setTestResult(`✅ OK · ${data.model || model || provider} · ${data.latencyMs ?? "?"}ms`);
+        setMsg(`✅ Проверка OK · ${data.model || ""}`);
+      } else {
+        const err = data.error || data.kind || "Ошибка проверки";
+        setTestResult(`❌ ${err}`);
+        setMsg(`❌ ${err}`);
+      }
+    } catch { setMsg("Ошибка сети"); setTestResult("❌ Ошибка сети"); }
+    finally { setTestLoading(false); }
+  };
+
   const saveAi = async (clearKey = false) => {
     setSaving(true); setMsg(null);
     try {
@@ -77,7 +101,7 @@ export default function AdminPage() {
         const details = (data as { details?: { fieldErrors?: Record<string, string[]> } })?.details?.fieldErrors;
         const first = details ? Object.entries(details).map(([k, v]) => `${k}: ${v.join(", ")}`).join("; ") : null;
         setMsg(first || data.error || "Ошибка сохранения");
-      } else { setMsg("Сохранено"); setAi(data); setKeyInput(""); }
+      } else { setMsg("Сохранено"); setAi(data); setKeyInput(""); setTestResult(null); }
     } catch { setMsg("Ошибка сети"); }
     finally { setSaving(false); }
   };
@@ -91,6 +115,30 @@ export default function AdminPage() {
       if (res.ok) setUsers(data.users || []);
     } catch {}
     finally { setUsersLoading(false); }
+  };
+
+  const handleDelete = async (id: string, display: string) => {
+    if (!confirm(`Удалить пользователя ${display} и все его данные? Это необратимо.`)) return;
+    if (!confirm(`Подтвердите ещё раз: удалить ${display}? Введите OK в следующем окне.`)) return;
+    const second = prompt(`Напишите DELETE для подтверждения удаления ${display}`);
+    if (second !== "DELETE") { alert("Отменено"); return; }
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) alert(data.error || "Ошибка удаления");
+      else { alert("Удалено"); await loadUsers(); }
+    } catch { alert("Ошибка сети"); }
+    finally { setDeletingId(null); }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/admin/logout", { method: "POST" });
+    } catch {}
+    // also clear client cookie fallback
+    try { document.cookie = "swipe_session=; Max-Age=0; Path=/;"; } catch {}
+    window.location.href = "/admin/login";
   };
 
   useEffect(() => { loadAi(); loadUsers(); }, []);
@@ -107,7 +155,12 @@ export default function AdminPage() {
 
   return (
     <div className="mx-auto flex h-dvh max-w-3xl flex-col gap-6 overflow-y-auto p-5 hide-scrollbar">
-      <h1 className="text-2xl font-bold">Admin — SwipeMark</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Admin — SwipeMark</h1>
+        <button onClick={handleLogout} className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-xs font-medium text-muted hover:bg-bg hover:text-text">
+          <LogOut className="size-3.5" /> Выйти
+        </button>
+      </div>
 
       {/* AI провайдер — для всех */}
       <section className="rounded-2xl border border-line bg-surface p-5">
@@ -127,12 +180,21 @@ export default function AdminPage() {
             <label className="text-xs font-semibold uppercase tracking-wider text-muted">Модель</label>
             <div className="flex gap-2">
               <input value={model} onChange={e=>setModel(e.target.value)} placeholder="model-id (пусто = дефолт провайдера)" className="flex-1 rounded-xl bg-bg px-3 py-2 text-sm" />
-              <button onClick={loadModels} disabled={modelsLoading} className="rounded-xl bg-bg px-3 py-2 text-xs font-medium text-accent disabled:opacity-50">{modelsLoading ? "…" : "Загрузить"}</button>
+              <button onClick={loadModels} disabled={modelsLoading} className="rounded-xl bg-bg px-3 py-2 text-xs font-medium text-accent disabled:opacity-50">{modelsLoading ? <Loader2 className="size-4 animate-spin" /> : "Загрузить"}</button>
+              <button onClick={testAi} disabled={testLoading || !ai?.hasKey} className="rounded-xl bg-accent/15 px-3 py-2 text-xs font-medium text-accent disabled:opacity-50">{testLoading ? <Loader2 className="size-4 animate-spin" /> : "Проверить"}</button>
             </div>
+            {testResult && <p className="text-xs font-medium text-accent">{testResult}</p>}
             {models && (
               <div className="max-h-44 overflow-y-auto rounded-xl bg-bg p-2">
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-xs text-muted">Найдено {models.length} моделей</span>
+                  <button onClick={()=>setModels(null)} className="text-xs text-muted hover:text-text">Скрыть ×</button>
+                </div>
                 {models.map(m => (
-                  <button key={m} onClick={()=>setModel(m)} className={`block w-full truncate rounded-lg px-2 py-1 text-left text-xs ${model===m ? "bg-accent/20 text-accent" : "text-muted hover:text-text"}`}>{m}</button>
+                  <button key={m} onClick={()=>{ setModel(m); setModels(null); }} className={`flex w-full items-center justify-between truncate rounded-lg px-2 py-1.5 text-left text-xs ${model===m ? "bg-accent/20 text-accent" : "text-muted hover:bg-surface hover:text-text"}`}>
+                    <span className="truncate">{m}</span>
+                    {model===m && <Check className="size-3.5 shrink-0" />}
+                  </button>
                 ))}
               </div>
             )}
@@ -148,7 +210,7 @@ export default function AdminPage() {
               <button onClick={()=>saveAi(false)} disabled={saving} className="rounded-full bg-accent px-5 py-2 text-sm font-semibold text-accent-text disabled:opacity-50">{saving ? "…" : "Сохранить"}</button>
               <button onClick={()=>saveAi(true)} disabled={saving || !ai?.hasKey} className="rounded-full bg-surface px-5 py-2 text-sm text-muted disabled:opacity-50">Удалить ключ</button>
             </div>
-            {msg && <p className="text-xs text-accent">{msg}</p>}
+            {msg && <p className="text-xs font-medium text-accent">{msg}</p>}
             <p className="text-[11px] text-muted">Источник: {ai?.source || "db"} {ai?.hasKey ? "· ключ сохранён (шифр enc:v1)" : "· env OPENROUTER_API_KEY как фолбэк если БД пусто"}</p>
           </div>
         )}
@@ -164,12 +226,20 @@ export default function AdminPage() {
         {usersLoading ? <p className="mt-3 text-sm text-muted">Загрузка…</p> : (
           <div className="mt-3 flex flex-col gap-2">
             {users.length===0 ? <p className="text-sm text-muted">Нет пользователей или загрузите список.</p> : users.map((u:any)=>(
-              <div key={u.id} className="flex items-center justify-between gap-2 rounded-xl bg-bg px-3 py-2">
-                <div className="min-w-0">
+              <div key={u.id} className="flex items-center gap-2 rounded-xl bg-bg px-3 py-2">
+                <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{u.display_name || u.telegram_username || "—"} <span className="text-xs text-muted">tg:{u.telegram_id ?? "—"}</span></p>
                   <p className="text-xs text-muted">{u.plan} {u.plan_until ? `до ${new Date(u.plan_until).toLocaleDateString()}` : ""} · saved:{u.stats?.saved ?? "—"} unsorted:{u.stats?.unsorted ?? "—"} autosort:{u.stats?.autosortUsed ?? 0}/50 summary:{u.stats?.summaryUsed ?? 0}/10</p>
                 </div>
-                <a href={`/api/admin/users/${u.id}`} target="_blank" className="text-xs text-accent">·</a>
+                <button
+                  onClick={() => handleDelete(u.id, u.display_name || u.telegram_username || u.telegram_id || u.id)}
+                  disabled={deletingId===u.id}
+                  aria-label="Удалить пользователя"
+                  title="Удалить пользователя"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-400 hover:bg-red-500/25 disabled:opacity-50"
+                >
+                  {deletingId===u.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                </button>
               </div>
             ))}
           </div>
