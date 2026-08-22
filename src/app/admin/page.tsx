@@ -89,7 +89,13 @@ export default function AdminPage() {
   useEffect(() => { loadAi(); loadUsers(); }, []);
 
   if (forbidden) {
-    return <div className="flex min-h-dvh items-center justify-center p-8 text-center"><p className="text-sm text-muted">403 Forbidden — доступ только для владельца.</p></div>;
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 p-8 text-center">
+        <p className="text-sm text-muted">403 Forbidden — доступ только для владельца.</p>
+        <p className="text-xs text-muted">Открой админку через Telegram WebView или войди по QR</p>
+        <a href="/admin/login" className="rounded-full bg-accent px-6 py-2.5 text-sm font-semibold text-accent-text">Войти по QR →</a>
+      </div>
+    );
   }
 
   return (

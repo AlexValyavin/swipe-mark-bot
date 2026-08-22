@@ -141,10 +141,21 @@ export async function POST(req: NextRequest) {
   try {
     const text0 = (message.text || "").trim();
 
-    // Привязка Telegram-аккаунта: /start <code>
-    const startMatch = text0.match(/^\/start(?:\s+([A-Z0-9]{8}))?$/i);
+    // Админ-вход по QR: /start admin_<CODE> — обрабатываем до обычной привязки
+    const startMatch = text0.match(/^\/start(?:\s+(\S+))?$/i);
     if (startMatch) {
-      await handleStart(fromId, startMatch[1] ?? null, reply);
+      const rawCode = startMatch[1] ?? null;
+      if (rawCode && rawCode.startsWith("admin_")) {
+        await handleAdminLogin(fromId, rawCode, reply);
+        return NextResponse.json({ ok: true });
+      }
+      const code = rawCode && /^[A-Z0-9]{8}$/i.test(rawCode) ? rawCode : null;
+      // если код есть но формат неверный — покажем welcome как для пустого
+      if (rawCode && !code && !rawCode.startsWith("admin_")) {
+        await handleStart(fromId, null, reply);
+        return NextResponse.json({ ok: true });
+      }
+      await handleStart(fromId, code, reply);
       return NextResponse.json({ ok: true });
     }
 
@@ -561,6 +572,29 @@ function kickMetaEnrich(userId: string, cardId: string): void {
     }
   };
   after(run);
+}
+
+/**
+ * Обрабатывает /start admin_<CODE> — QR-вход в админку (только для OWNER_TELEGRAM_ID).
+ */
+async function handleAdminLogin(
+  fromId: number,
+  code: string,
+  reply: (text: string, buttons?: { text: string; url?: string; callback_data?: string }[][]) => Promise<void>
+): Promise<void> {
+  const ownerTgId = Number(process.env.OWNER_TELEGRAM_ID || 0);
+  if (!ownerTgId || fromId !== ownerTgId) {
+    await reply("⛔ Этот код только для владельца SwipeMark.");
+    return;
+  }
+  const { consumeAdminLoginCode, markAdminCodeUsed } = await import("@/lib/db/adminLogin");
+  const row = await consumeAdminLoginCode(code);
+  if (!row) {
+    await reply("❌ Код недействителен или истёк. Сгенерируй новый в /admin → Войти по QR.");
+    return;
+  }
+  await markAdminCodeUsed(code, fromId);
+  await reply("✅ Админ-вход подтверждён — вернись в браузер, он уже авторизован. Обнови страницу /admin.");
 }
 
 /**
