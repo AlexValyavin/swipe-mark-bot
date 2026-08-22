@@ -132,6 +132,7 @@ export const en = {
   "library.recent": "RECENT",
   "library.noFoldersHint": "No folders yet — create one",
   "library.unsortedAction": "Sort",
+  "library.showFolders": "To folders",
   "library.filters": "Filters",
   "library.refresh": "Refresh",
   "library.clear": "Clear",

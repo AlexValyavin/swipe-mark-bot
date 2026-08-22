@@ -132,6 +132,7 @@ export const ru = {
   "library.recent": "НЕДАВНИЕ",
   "library.noFoldersHint": "Папок пока нет — создай первую",
   "library.unsortedAction": "Разложить",
+  "library.showFolders": "К папкам",
   "library.filters": "Фильтры",
   "library.refresh": "Обновить",
   "library.clear": "Очистить",

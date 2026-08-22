@@ -134,6 +134,11 @@ export function Library({
   const [tagMenuCard, setTagMenuCard] = useState<Bookmark | null>(null);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [detailBookmark, setDetailBookmark] = useState<Bookmark | null>(null);
+  const [foldersCollapsed, setFoldersCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("library-folders-collapsed") === "1";
+  });
+  const [viewMode, setViewMode] = useState<"overview" | "all">("overview");
 
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -141,6 +146,19 @@ export function Library({
   const [massBusy, setMassBusy] = useState(false);
   const [massTagInput, setMassTagInput] = useState("");
   const [longPressTimer, setLongPressTimer] = useState<number | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("library-folders-collapsed", foldersCollapsed ? "1" : "0");
+    } catch {}
+  }, [foldersCollapsed]);
+
+  // сброс viewMode при смене фильтра — возвращаемся в обзор
+  useEffect(() => {
+    if (folderId !== null || q.trim() || selectedTags.length > 0) {
+      setViewMode("overview");
+    }
+  }, [folderId, q, selectedTags]);
 
   const loadTags = async () => {
     try {
@@ -503,8 +521,9 @@ export function Library({
         </div>
       </div>
 
-      {/* Search: ✨ Найти в сохранёнках — слот под будущий AI Search */}
-      <div className="px-5 pb-3">
+      <div className="flex-1 overflow-y-auto hide-scrollbar">
+        {/* Search: ✨ Найти в сохранёнках — слот под будущий AI Search */}
+        <div className="px-5 pb-3">
         <div className="flex items-center gap-2.5 rounded-2xl bg-surface px-4 py-3 ring-1 ring-white/5">
           <Search className="size-[18px] shrink-0 text-muted" />
           <input
@@ -525,18 +544,27 @@ export function Library({
         </div>
       </div>
 
-      {/* Папки — главный объект библиотеки (грид, не горизонтальные чипы) */}
-      {folderId === null && !q.trim() && selectedTags.length === 0 && (
+      {/* Папки — главный объект библиотеки (компактный грид + сворачивание) */}
+      {folderId === null && !q.trim() && selectedTags.length === 0 && viewMode === "overview" && (
         <div className="px-5 pb-2">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
-              {t("library.section.folders")}
-            </h2>
+          <div className="mb-1.5 flex items-center justify-between">
             <button
               onClick={() => {
-                // Все сохранёнки → снимает фильтр папки, показывает полный список
                 telegram?.haptic.selection();
-                setFolderId(null);
+                setFoldersCollapsed((v) => !v);
+              }}
+              className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted"
+            >
+              <span>{t("library.section.folders")}</span>
+              <span className={`transition-transform ${foldersCollapsed ? "-rotate-90" : "rotate-0"}`}>▾</span>
+              <span className="ml-1 rounded-full bg-surface px-1.5 py-0.5 text-[10px] font-bold text-muted">
+                {folders.length + 1}
+              </span>
+            </button>
+            <button
+              onClick={() => {
+                telegram?.haptic.selection();
+                setViewMode("all");
               }}
               className="text-xs font-medium text-accent"
             >
@@ -544,43 +572,67 @@ export function Library({
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-2.5">
-            {/* Системная папка Неразобранное — всегда первая */}
-            <button
-              onClick={() => {
-                telegram?.haptic.selection();
-                setFolderId("unsorted");
-              }}
-              className="flex flex-col gap-2 rounded-2xl border bg-surface p-4 text-left transition-colors hover:bg-line active:scale-[0.98] border-amber-500/20"
-            >
-              <span className="text-2xl">📥</span>
-              <span className="text-sm font-semibold text-text">{t("library.chip.unsorted")}</span>
-              <span className="text-xs text-muted">{unsortedCount} {tp("words.save", unsortedCount)}</span>
-              {unsortedCount > 0 && (
-                <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-1 text-[11px] font-medium text-amber-400">
-                  <Sparkles className="size-3" /> {t("library.unsortedAction")}
-                </span>
-              )}
-            </button>
-
-            {folders.map((f) => (
+          {!foldersCollapsed && (
+            <div className="grid grid-cols-2 gap-2">
+              {/* Системная — компактная */}
               <button
-                key={f.id}
                 onClick={() => {
                   telegram?.haptic.selection();
-                  setFolderId(f.id);
+                  setFolderId("unsorted");
                 }}
-                className="flex flex-col gap-2 rounded-2xl bg-surface p-4 text-left transition-colors hover:bg-line active:scale-[0.98] group"
+                className="relative flex flex-col gap-1 rounded-xl border bg-surface px-3 py-3 text-left transition-colors hover:bg-line active:scale-[0.98] border-amber-500/15"
               >
-                <span className="text-2xl">{f.emoji || "📁"}</span>
-                <span className="truncate text-sm font-semibold text-text">{f.name}</span>
-                <span className="text-xs text-muted">{f.count} {tp("words.save", f.count)}</span>
+                <span className="text-xl leading-none">📥</span>
+                <span className="truncate text-[13px] font-semibold leading-tight text-text">
+                  {t("library.chip.unsorted")}
+                </span>
+                <span className="text-[11px] leading-none text-muted">
+                  {unsortedCount} {tp("words.save", unsortedCount)}
+                </span>
+                {unsortedCount > 0 && (
+                  <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-400">
+                    <Sparkles className="size-3" /> {t("library.unsortedAction")}
+                  </span>
+                )}
               </button>
-            ))}
-          </div>
 
-          {folders.length === 0 && unsortedCount === 0 && (
-            <p className="mt-3 text-center text-xs text-muted">{t("library.noFoldersHint")}</p>
+              {folders.map((f) => (
+                <div
+                  key={f.id}
+                  className="relative flex flex-col gap-1 rounded-xl bg-surface px-3 py-3 text-left transition-colors hover:bg-line"
+                >
+                  <button
+                    onClick={() => {
+                      telegram?.haptic.selection();
+                      setFolderId(f.id);
+                    }}
+                    className="flex flex-col gap-1 text-left active:scale-[0.98]"
+                  >
+                    <span className="text-xl leading-none">{f.emoji || "📁"}</span>
+                    <span className="truncate text-[13px] font-semibold leading-tight text-text">{f.name}</span>
+                    <span className="text-[11px] leading-none text-muted">
+                      {f.count} {tp("words.save", f.count)}
+                    </span>
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      telegram?.haptic.selection();
+                      setDeleteOpen(f.id);
+                    }}
+                    aria-label={t("library.deleteFolder")}
+                    title={t("library.deleteFolder")}
+                    className="absolute right-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-bg/80 text-muted opacity-60 transition-opacity hover:opacity-100 hover:text-danger"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!foldersCollapsed && folders.length === 0 && unsortedCount === 0 && (
+            <p className="mt-2 text-center text-xs text-muted">{t("library.noFoldersHint")}</p>
           )}
         </div>
       )}
@@ -867,9 +919,9 @@ export function Library({
                       : t("library.empty.defaultHint")}
             </p>
           </div>
-        ) : folderId === null && !q.trim() && selectedTags.length === 0 ? (
-          /* Обзор библиотеки: папки уже выше, тут — Все сохранёнки → + Недавние (spec §2, §11) */
-          <div className="flex-1 overflow-y-auto hide-scrollbar">
+        ) : folderId === null && !q.trim() && selectedTags.length === 0 && viewMode === "overview" ? (
+          /* Обзор библиотеки: папки уже выше, тут — Недавние (spec §2, §11) */
+          <div className="flex flex-col">
             <div className="px-5 py-2 flex items-center justify-between">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
                 {t("library.recent")}
@@ -930,7 +982,22 @@ export function Library({
             )}
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto p-4 hide-scrollbar">
+          <div className="flex flex-col p-4">
+            {viewMode === "all" && !q.trim() && selectedTags.length === 0 && folderId === null && (
+              <div className="mb-3 flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    telegram?.haptic.selection();
+                    setViewMode("overview");
+                  }}
+                  className="flex items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-xs font-medium text-text"
+                >
+                  ← {t("library.showFolders")}
+                </button>
+                <span className="text-sm font-semibold text-text">{t("library.allSaves")}</span>
+                <span className="text-xs text-muted">{bookmarks.length}</span>
+              </div>
+            )}
             {groupByPeriod(bookmarks, {
               today: t("library.group.today"),
               week: t("library.group.week"),
@@ -1145,6 +1212,7 @@ export function Library({
             ))}
           </div>
         )}
+      </div>
       </div>
 
       {/* Create folder modal */}
