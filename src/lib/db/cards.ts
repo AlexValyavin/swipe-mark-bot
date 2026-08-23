@@ -243,15 +243,33 @@ export async function listForLibrary(
   }
 
   if (q.q) {
+    const searchIds = new Set<string>();
+
+    // 1) Прямое вхождение в title/text (ILIKE).
     const { data: searched } = await db
       .from("cards")
       .select("id")
       .eq("user_id", userId)
       .or(`title.ilike.%${q.q}%,text.ilike.%${q.q}%`)
       .limit(500);
-    const searchIds = new Set((searched ?? []).map((r) => r.id));
+    for (const r of searched ?? []) searchIds.add(r.id);
 
-    // Совпадение по имени тега: добавляем карточки, где есть тег с q.
+    // 2) Полнотекстный поиск (миграция 0008_ai_search.sql).
+    // Если колонка search_vector ещё не создана — запрос упадёт, тихо пропускаем:
+    // ILIKE и теги продолжают работать.
+    {
+      const { data: ftsRows, error: ftsError } = await db
+        .from("cards")
+        .select("id")
+        .eq("user_id", userId)
+        .textSearch("search_vector", q.q, { type: "websearch", config: "russian" })
+        .limit(500);
+      if (!ftsError) {
+        for (const r of ftsRows ?? []) searchIds.add(r.id);
+      }
+    }
+
+    // 3) Совпадение по имени тега: добавляем карточки, где есть тег с q.
     const { data: tagRows } = await db
       .from("tags")
       .select("id")

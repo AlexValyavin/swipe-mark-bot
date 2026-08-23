@@ -121,6 +121,15 @@
 4. **Прогресс в Dynamic Island** — перенести `SwipeDeck:112-137` (`done/total + pct bar`) в тот же island: `lastSwipe ? toast : progress` (`page.tsx:36 pct`, `done/total`), `w-[220px] bg-black/55`, удалить оба старых позиционирования.
 
 ### P1 — следом
-- Папки 2 уровня (`folders.parent_id` отсутствует — `folders.ts:1`), AI Search слот `Library:526` (только `ILIKE`), `embedding vector(768):types:114` не заполняется, квота `ai_usage 50/10` без блокировки (`0006:17`), `premium/paywall`, `PWA` install prompt.
-- На проде вернуть реальный AI-ключ и `BOT_USERNAME` в `.env.local` / env Vercel; добавить `TELEGRAM_BOT_TOKEN` (без него media-кэш не качает файлы, а webhook молчит).
+- **AI Search (4 этапа, план утверждён 2026-08-23)** — гибридный поиск: PostgreSQL FTS + pgvector, без внешней инфраструктуры.
+  - **Архитектура**: при сохранении — дешёвый слой (title/text/og_description уже в card_links) + embedding; поиск = FTS ∥ vector → RRF-слияние top-20; LLM только для «Спросить» (top-5 → ответ). Summary/tags — не фундамент поиска, semantic search работает на embeddings исходного контента.
+  - **Этап 1 — FTS**: миграция `0008_ai_search.sql` (`search_vector tsvector generated` + GIN, HNSW на `embedding vector_cosine_ops`, kind='search' в ai_usage check); `/api/library?q=` OR `search_vector @@ websearch_to_tsquery('russian', q)`.
+  - **Этап 2 — Embeddings**: `adapter.embed()` OpenAI-совместимый `/embeddings` (env `AI_EMBEDDING_PROVIDER/MODEL/KEY`, dims=768 под существующую колонку `cards.embedding vector(768)`, текст ≤8k); вебхук `after()` эмбеддинг новой карточки (фото без текста — skip); `scripts/backfill-embeddings.ts` батчами, идемпотентно (`WHERE embedding IS NULL`); `POST /api/search/ai` — embed запроса → cosine top-50 + FTS top-50 → RRF → top-20.
+  - **Этап 3 — ✨ Спросить**: UI в поиске «Сохранёнок» — Enter/кнопка «Спросить» → sheet с результатами; вопросительный запрос → LLM-ответ по top-5 (`kind='search'`, free 20/мес, 429 через квоту Sprint B); тап по результату → MaterialSheet.
+  - **Этап 4 — позже**: LLM-rerank, chunks для длинных статей (>8k), content_hash, AI-budget в Premium.
+  - **Решения**: rerank в MVP заменён RRF (бесплатно/детерминированно); dims 768 без смены схемы (`dimensions=768` параметр OpenAI); без новой машины состояний — INDEXED = `embedding IS NOT NULL`, ENRICHED = `ai_summary IS NOT NULL`; content_hash отложен (пере-эмбеддинг только при refetch).
+  - **Стоимость**: эмбеддинг 10k сохранений ≈ $0.05–0.10 разово; поиск бесплатный; LLM-ответ только по явному «Спросить» (покрыт квотой).
+
+- Папки 2 уровня (`folders.parent_id` отсутствует — `folders.ts:1`), ~~AI Search слот~~ (см. выше), `embedding vector(768):types:114` не заполняется (заполняется в AI Search этап 2), ~~квота `ai_usage 50/10` без блокировки~~ (реализовано, Спринт B), `premium/paywall`, `PWA` install prompt.
+- На проде вернуть реальный AI-ключ и `BOT_USERNAME` в `.env.local` / env Vercel; добавить `TELEGRAM_BOT_TOKEN` (без него media-кэш не качает файлы, а webhook молчит). Для AI Search этапа 2 дополнительно: `AI_EMBEDDING_PROVIDER/MODEL/KEY`.
 - **Фаза R, Шаг 5**: ручной прогон пересылок t.me/видео/PDF через бота (человек-шаг ТЗ).
