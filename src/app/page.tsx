@@ -640,30 +640,30 @@ export default function Home() {
 
   return (
     <div className="app-column mx-auto flex h-dvh w-full flex-col bg-bg">
-      {/* Header + Dynamic Island (прогресс/тост между логотипом и плюсом) */}
-      <header className="relative flex items-center justify-between px-5 py-3">
-        <div className="flex items-center gap-2.5">
+      {/* Header — логотип | прогресс | действия в одной линии */}
+      <header className="flex items-center justify-between gap-3 px-5 py-3">
+        <div className="flex shrink-0 items-center gap-2.5">
           <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-lg text-white shadow-lg">
             ⚡
           </div>
         </div>
 
-        {/* Dynamic Island — компактный, не перекрывает + */}
-        <div className="pointer-events-none absolute left-1/2 top-[calc(env(safe-area-inset-top,0px)+6px)] z-[55] flex max-w-[42vw] -translate-x-1/2 justify-center sm:max-w-[48vw] md:top-3">
+        {/* Центр — компактный прогресс / тост (не Dynamic Island, обычный UI) */}
+        <div className="flex min-w-0 flex-1 justify-center">
           <AnimatePresence mode="popLayout">
             {lastSwipe && deck.length > 0 ? (
               <motion.div
                 key="toast"
-                initial={{ opacity: 0, scale: 0.9, y: -8 }}
+                initial={{ opacity: 0, scale: 0.95, y: -4 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: -8 }}
+                exit={{ opacity: 0, scale: 0.95, y: -4 }}
                 transition={{ type: "spring", stiffness: 400, damping: 28 }}
-                className="pointer-events-auto flex max-w-full items-center gap-1.5 rounded-full border border-line bg-surface/85 px-2 py-0.5 shadow-xl backdrop-blur-md"
+                className="pointer-events-auto flex max-w-[56vw] items-center gap-1 rounded-full border border-line bg-surface/90 px-2 py-1 shadow-md backdrop-blur-sm"
               >
-                <span className="max-w-[90px] truncate pl-1.5 text-[11px] font-medium text-text">{undoLabel}</span>
+                <span className="max-w-[70px] truncate pl-1 text-[11px] font-medium text-text">{undoLabel}</span>
                 <button
                   onClick={undoLastSwipe}
-                  className="shrink-0 rounded-full bg-accent px-2.5 py-0.5 text-[11px] font-semibold text-accent-text active:scale-95"
+                  className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-accent-text active:scale-95"
                 >
                   {t("undo.undo")}
                 </button>
@@ -671,32 +671,29 @@ export default function Home() {
             ) : tab === "inbox" && !folderDeck && deck.length > 0 ? (
               <motion.div
                 key="progress"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="pointer-events-none w-[150px] rounded-full border border-white/10 bg-black/55 px-2.5 py-1 backdrop-blur-md sm:w-[170px]"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex w-[110px] flex-col items-center gap-1 sm:w-[130px]"
               >
-                <div className="flex items-center justify-between gap-1.5">
-                  <span className="text-[11px] font-bold tabular-nums text-white">
-                    {sessionDone} / {totalForIsland}
-                  </span>
-                  <span className="max-w-[70px] truncate text-[10px] text-white/70">
-                    {deck.length === 1 ? t("deck.last") : `${deck.length}`}
-                  </span>
-                </div>
-                <div className="mt-1 h-0.5 overflow-hidden rounded-full bg-white/20">
+                <span className="text-xs font-semibold tabular-nums text-muted">
+                  {sessionDone} / {totalForIsland}
+                </span>
+                <div className="h-[2px] w-full overflow-hidden rounded-full bg-line/40">
                   <motion.div
-                    className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500"
+                    className="h-full rounded-full bg-accent/60"
                     animate={{ width: `${pctIsland}%` }}
-                    transition={{ type: "spring", stiffness: 200, damping: 30 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
                   />
                 </div>
               </motion.div>
-            ) : null}
+            ) : (
+              <div className="w-[110px] sm:w-[130px]" />
+            )}
           </AnimatePresence>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <AddButton
             onOpen={() => {
               telegram?.haptic.selection();
