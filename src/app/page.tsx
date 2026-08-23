@@ -648,8 +648,8 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Dynamic Island */}
-        <div className="pointer-events-none absolute left-1/2 top-[calc(env(safe-area-inset-top,0px)+8px)] z-[55] flex -translate-x-1/2 justify-center md:top-3">
+        {/* Dynamic Island — компактный, не перекрывает + */}
+        <div className="pointer-events-none absolute left-1/2 top-[calc(env(safe-area-inset-top,0px)+6px)] z-[55] flex max-w-[42vw] -translate-x-1/2 justify-center sm:max-w-[48vw] md:top-3">
           <AnimatePresence mode="popLayout">
             {lastSwipe && deck.length > 0 ? (
               <motion.div
@@ -658,12 +658,12 @@ export default function Home() {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: -8 }}
                 transition={{ type: "spring", stiffness: 400, damping: 28 }}
-                className="pointer-events-auto flex items-center gap-2 rounded-full border border-line bg-surface/85 px-2 py-1 shadow-xl backdrop-blur-md"
+                className="pointer-events-auto flex max-w-full items-center gap-1.5 rounded-full border border-line bg-surface/85 px-2 py-0.5 shadow-xl backdrop-blur-md"
               >
-                <span className="pl-2 text-xs font-medium text-text">{undoLabel}</span>
+                <span className="max-w-[90px] truncate pl-1.5 text-[11px] font-medium text-text">{undoLabel}</span>
                 <button
                   onClick={undoLastSwipe}
-                  className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-accent-text active:scale-95"
+                  className="shrink-0 rounded-full bg-accent px-2.5 py-0.5 text-[11px] font-semibold text-accent-text active:scale-95"
                 >
                   {t("undo.undo")}
                 </button>
@@ -674,17 +674,17 @@ export default function Home() {
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="pointer-events-none w-[220px] rounded-full border border-white/10 bg-black/55 px-3 py-1.5 backdrop-blur-md"
+                className="pointer-events-none w-[150px] rounded-full border border-white/10 bg-black/55 px-2.5 py-1 backdrop-blur-md sm:w-[170px]"
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-bold tabular-nums text-white">
+                <div className="flex items-center justify-between gap-1.5">
+                  <span className="text-[11px] font-bold tabular-nums text-white">
                     {sessionDone} / {totalForIsland}
                   </span>
-                  <span className="text-[11px] text-white/70">
-                    {deck.length === 1 ? t("deck.last") : `${deck.length} ${t("deck.progress.left")}`}
+                  <span className="max-w-[70px] truncate text-[10px] text-white/70">
+                    {deck.length === 1 ? t("deck.last") : `${deck.length}`}
                   </span>
                 </div>
-                <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/20">
+                <div className="mt-1 h-0.5 overflow-hidden rounded-full bg-white/20">
                   <motion.div
                     className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500"
                     animate={{ width: `${pctIsland}%` }}
