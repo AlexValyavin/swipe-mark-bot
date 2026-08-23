@@ -584,7 +584,7 @@ async function handleAdminLogin(
 ): Promise<void> {
   const ownerTgId = Number(String(process.env.OWNER_TELEGRAM_ID || "").trim() || 0);
   if (!ownerTgId || Number(fromId) !== ownerTgId) {
-    await reply(`⛔ Этот код только для владельца SwipeMark.\nВаш ID: ${fromId}, ожидаю: ${ownerTgId || "не задан"}. Проверь OWNER_TELEGRAM_ID в Vercel.`);
+    await reply("⛔ Этот код только для владельца SwipeMark.");
     return;
   }
   const { consumeAdminLoginCode, markAdminCodeUsed } = await import("@/lib/db/adminLogin");

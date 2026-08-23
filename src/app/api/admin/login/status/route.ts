@@ -22,14 +22,14 @@ export async function GET(req: NextRequest) {
     // Проверяем совпадение с владельцем (bigint может прийти строкой)
     const ownerTgId = Number(String(process.env.OWNER_TELEGRAM_ID || "").trim() || 0);
     if (!ownerTgId || Number(row.telegram_id) !== ownerTgId) {
-      return NextResponse.json({ linked: true, authorized: false, telegram_id: row.telegram_id, ownerTgId });
+      return NextResponse.json({ linked: true, authorized: false });
     }
 
     // Выдаём сессию владельцу (создаём профиль если впервые)
     const profile = await getOrCreateProfileByTelegramId(ownerTgId);
     if (!profile) return NextResponse.json({ linked: true, authorized: false });
 
-    const res = NextResponse.json({ linked: true, authorized: true, telegram_id: row.telegram_id });
+    const res = NextResponse.json({ linked: true, authorized: true });
     res.headers.set("Set-Cookie", createSessionCookie(profile.id));
     return res;
   } catch (e) {
