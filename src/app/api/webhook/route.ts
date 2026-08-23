@@ -272,6 +272,7 @@ export async function POST(req: NextRequest) {
       );
       kickEnrich(userId, albumCardId);
       kickMediaCache(userId, albumCardId);
+      kickEmbedding(userId, albumCardId);
       await trackCapture(userId, primaryType, "telegram_bot");
       await sendSavedReply(userId, reply);
       return NextResponse.json({ ok: true });
@@ -300,6 +301,7 @@ export async function POST(req: NextRequest) {
     if (cardId) {
       kickEnrich(userId, cardId);
       kickMediaCache(userId, cardId);
+      kickEmbedding(userId, cardId);
       if (links.length > 0) kickMetaEnrich(userId, cardId);
       await trackCapture(userId, primaryType, "telegram_bot");
       await sendSavedReply(userId, reply);
@@ -535,6 +537,21 @@ function kickEnrich(userId: string, cardId: string): void {
       }
     } catch (e) {
       console.error(`AI enrich error for card ${cardId}:`, e);
+    }
+  });
+}
+
+/**
+ * Фоновый эмбеддинг карточки для semantic search (AI Search этап 2).
+ * Опционален: при отсутствии embedding-ключа молча пропускается.
+ */
+function kickEmbedding(userId: string, cardId: string): void {
+  after(async () => {
+    try {
+      const { embedCard } = await import("@/lib/ai/embed");
+      await embedCard(userId, cardId);
+    } catch (e) {
+      console.error(`Embedding error for card ${cardId}:`, e);
     }
   });
 }

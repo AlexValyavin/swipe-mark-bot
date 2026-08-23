@@ -201,3 +201,94 @@ export async function listModels(
     .filter((id): id is string => typeof id === "string" && id.length > 0);
   return [...new Set(ids)].sort((a, b) => a.localeCompare(b));
 }
+
+// --- Embeddings (OpenAI-совместимый POST /embeddings) ---
+
+export const EMBEDDING_DIMENSIONS = 768;
+
+type EmbeddingConfig = {
+  provider: AiProvider;
+  model: string;
+  apiKey: string;
+  baseUrl?: string;
+};
+
+/**
+ * Конфиг эмбеддингов — отдельный от чат-ключа:
+ * AI_EMBEDDING_PROVIDER (openai|custom, дефолт openai),
+ * AI_EMBEDDING_MODEL (дефолт text-embedding-3-small),
+ * AI_EMBEDDING_API_KEY → фолбэк OPENAI_API_KEY,
+ * AI_EMBEDDING_BASE_URL (для custom).
+ * OpenRouter для /embeddings не используем.
+ */
+function embeddingConfig(): EmbeddingConfig {
+  const provider = ((process.env.AI_EMBEDDING_PROVIDER || "openai") as AiProvider);
+  const model = process.env.AI_EMBEDDING_MODEL?.trim() || "text-embedding-3-small";
+  const apiKey =
+    process.env.AI_EMBEDDING_API_KEY?.trim() ||
+    process.env.OPENAI_API_KEY?.trim() ||
+    "";
+  if (!apiKey) {
+    throw new AiError("auth", "Embedding key not configured (AI_EMBEDDING_API_KEY or OPENAI_API_KEY)");
+  }
+  return { provider, model, apiKey, baseUrl: process.env.AI_EMBEDDING_BASE_URL?.trim() || undefined };
+}
+
+function resolveEmbeddingsEndpoint(provider: AiProvider, baseUrl?: string): string {
+  if (provider === "custom") {
+    const b = normalizeBaseUrl(baseUrl);
+    if (!b) throw new AiError("network", "AI_EMBEDDING_BASE_URL is required");
+    return `${b}/embeddings`;
+  }
+  return `${PROVIDER_BASE_URLS[provider]}/embeddings`;
+}
+
+/** Один текст → вектор размерности EMBEDDING_DIMENSIONS. */
+export async function embed(text: string, timeoutMs = 15000): Promise<number[]> {
+  const cfg = embeddingConfig();
+  const endpoint = resolveEmbeddingsEndpoint(cfg.provider, cfg.baseUrl);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let res: Response;
+  try {
+    res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${cfg.apiKey}`,
+      },
+      // dimensions поддерживает OpenAI text-embedding-3*; другие провайдеры получают без него
+      body: JSON.stringify(
+        cfg.model.startsWith("text-embedding-3")
+          ? { model: cfg.model, input: text, dimensions: EMBEDDING_DIMENSIONS }
+          : { model: cfg.model, input: text }
+      ),
+      signal: controller.signal,
+    });
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new AiError("timeout", "Embedding request timed out");
+    }
+    throw new AiError("network", `Embedding network error: ${e instanceof Error ? e.message : e}`);
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const body = (await res.json()) as { error?: { message?: string } };
+      detail = body?.error?.message ?? "";
+    } catch {}
+    throw new AiError(mapError(res.status), `HTTP ${res.status}${detail ? `: ${detail}` : ""}`);
+  }
+
+  const data = (await res.json()) as { data?: { embedding?: number[] }[] } | null;
+  const vec = data?.data?.[0]?.embedding;
+  if (!Array.isArray(vec) || vec.length === 0) {
+    throw new AiError("parse", "No embedding in provider response");
+  }
+  return vec;
+}

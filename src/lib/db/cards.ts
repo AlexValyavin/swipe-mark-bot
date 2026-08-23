@@ -363,6 +363,24 @@ export async function getForUser(
   return loadBookmark(card as CardRow);
 }
 
+/** Пачка карточек по id (для AI-поиска). Сохраняет порядок ids. */
+export async function getByIds(
+  userId: string,
+  ids: string[]
+): Promise<Bookmark[]> {
+  if (ids.length === 0) return [];
+  const db = getAdminDb();
+  const { data: cards, error } = await db
+    .from("cards")
+    .select("*")
+    .eq("id", ids.length > 100 ? ids.slice(0, 100) : ids)
+    .eq("user_id", userId);
+  assertNoError(error);
+  const loaded = await Promise.all((cards ?? []).map((c) => loadBookmark(c as CardRow)));
+  const byId = new Map(loaded.map((b) => [b.id, b]));
+  return ids.map((id) => byId.get(id)).filter((b): b is Bookmark => Boolean(b));
+}
+
 export async function findCardIdByMediaGroup(
   userId: string,
   mediaGroupId: string

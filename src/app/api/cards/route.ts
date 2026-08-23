@@ -102,6 +102,14 @@ export async function POST(req: NextRequest) {
           console.error(`Meta enrich error for card ${cardId}:`, e);
         }
       });
+      after(async () => {
+        try {
+          const { embedCard } = await import("@/lib/ai/embed");
+          await embedCard(userId, cardId);
+        } catch (e) {
+          console.error(`Embedding error for card ${cardId}:`, e);
+        }
+      });
     }
 
     if (created.length > 0) {
