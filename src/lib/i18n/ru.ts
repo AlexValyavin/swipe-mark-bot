@@ -200,6 +200,15 @@ export const ru = {
   "filters.tags": "Теги",
   "filters.noTags": "Тегов пока нет",
 
+  // AiSearchSheet (AI Search этап 3)
+  "aisearch.ask": "Спросить у сохранёнок",
+  "aisearch.answer": "Ответ",
+  "aisearch.results": "Найдено: {count}",
+  "aisearch.thinking": "Ищу по сохранёнкам…",
+  "aisearch.quotaExhausted": "Лимит AI-вопросов на этот месяц исчерпан.",
+  "aisearch.blocked": "AI отключён для этого аккаунта.",
+  "aisearch.error": "Не удалось выполнить поиск",
+
   // AutosortSheet
   "autosort.title": "Разложить с AI",
   "autosort.queueCount": "Карточек без папки: {count}",

@@ -200,6 +200,15 @@ export const en = {
   "filters.tags": "Tags",
   "filters.noTags": "No tags yet",
 
+  // AiSearchSheet (AI Search stage 3)
+  "aisearch.ask": "Ask your saves",
+  "aisearch.answer": "Answer",
+  "aisearch.results": "Found: {count}",
+  "aisearch.thinking": "Searching your saves…",
+  "aisearch.quotaExhausted": "Monthly AI question limit reached.",
+  "aisearch.blocked": "AI is disabled for this account.",
+  "aisearch.error": "Search failed",
+
   // AutosortSheet
   "autosort.title": "Sort with AI",
   "autosort.queueCount": "Cards without folder: {count}",

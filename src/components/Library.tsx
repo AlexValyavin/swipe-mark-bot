@@ -27,6 +27,7 @@ import { useTelegram } from "@/components/TelegramProvider";
 import { useI18n } from "@/components/I18nProvider";
 import { SourceBadge, MetaStatusDot } from "@/components/SourceBadge";
 import { MaterialSheet } from "@/components/MaterialSheet";
+import { AiSearchSheet } from "@/components/AiSearchSheet";
 import { trackClient } from "@/lib/analyticsClient";
 import { thumbFor, typeEmoji } from "@/lib/format";
 
@@ -128,6 +129,7 @@ export function Library({
   const [tagMenuCard, setTagMenuCard] = useState<Bookmark | null>(null);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [detailBookmark, setDetailBookmark] = useState<Bookmark | null>(null);
+  const [aiSearchOpen, setAiSearchOpen] = useState(false);
   const [foldersCollapsed, setFoldersCollapsed] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("library-folders-collapsed") === "1";
@@ -508,6 +510,22 @@ export function Library({
           )}
         </div>
       </div>
+
+      {/* ✨ Спросить у сохранёнок — появляется при непустом запросе */}
+      {q.trim() && (
+        <div className="px-5 pb-2">
+          <button
+            onClick={() => {
+              telegram?.haptic.selection();
+              setAiSearchOpen(true);
+            }}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent/15 px-3 py-2.5 text-sm font-semibold text-accent transition-colors hover:bg-accent/25 active:scale-[0.98]"
+          >
+            <Sparkles className="size-4" />
+            {t("aisearch.ask")} «{q.trim().slice(0, 40)}{q.trim().length > 40 ? "…" : ""}»
+          </button>
+        </div>
+      )}
 
       {/* Папки — главный объект библиотеки (компактный грид + сворачивание) */}
       {folderId === null && !q.trim() && selectedTags.length === 0 && viewMode === "overview" && (
@@ -1304,6 +1322,20 @@ export function Library({
             onClose={() => setDetailBookmark(null)}
             onOpen={(b) => {
               setDetailBookmark(null);
+              onOpen(b);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ✨ Спросить у сохранёнок (AI Search этап 3) */}
+      <AnimatePresence>
+        {aiSearchOpen && (
+          <AiSearchSheet
+            q={q.trim()}
+            onClose={() => setAiSearchOpen(false)}
+            onOpen={(b) => {
+              setAiSearchOpen(false);
               onOpen(b);
             }}
           />

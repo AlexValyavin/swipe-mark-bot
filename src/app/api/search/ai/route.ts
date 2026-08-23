@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
 import { getAdminDb } from "@/lib/db/supabase";
 import { getByIds } from "@/lib/db/cards";
-import { embed, AiError, EMBEDDING_DIMENSIONS } from "@/lib/ai/adapter";
+import { embed, AiError, EMBEDDING_DIMENSIONS, chatCompletion } from "@/lib/ai/adapter";
+import { resolveAiContext } from "@/lib/ai/enrich";
+import { checkAiAllowed, recordAiUsage } from "@/lib/ai/quota";
 
 export const runtime = "nodejs";
 
@@ -10,6 +12,7 @@ const VECTOR_CANDIDATES = 20;
 const FTS_CANDIDATES = 50;
 const FINAL_LIMIT = 20;
 const RRF_K = 60;
+const CONTEXT_SNIPPET = 400;
 
 type ScoredId = { id: string; score: number };
 
@@ -26,18 +29,67 @@ function rrfMerge(lists: string[][]): ScoredId[] {
     .slice(0, FINAL_LIMIT);
 }
 
+/** LLM-ответ по top-5 результатов. Возвращает null при отказе/ошибке (результаты всё равно показываем). */
+async function answerWithLlm(
+  userId: string,
+  q: string,
+  results: Awaited<ReturnType<typeof getByIds>>
+): Promise<{ answer: string | null; quotaExhausted: boolean }> {
+  if (results.length === 0) return { answer: null, quotaExhausted: false };
+
+  const check = await checkAiAllowed(userId, "search");
+  if (!check.ok) return { answer: null, quotaExhausted: check.reason === "quota" };
+
+  const ctx = await resolveAiContext(userId);
+  if (!ctx) return { answer: null, quotaExhausted: false };
+
+  const context = results
+    .slice(0, 5)
+    .map(
+      (b, i) =>
+        `${i + 1}. ${b.title || "(без заголовка)"} — ${(b.aiSummary || b.description || "").slice(0, CONTEXT_SNIPPET)}`
+    )
+    .join("\n");
+
+  try {
+    const result = await chatCompletion({
+      provider: ctx.provider,
+      apiKey: ctx.apiKey,
+      model: ctx.model,
+      baseUrl: ctx.baseUrl,
+      messages: [
+        {
+          role: "system",
+          content:
+            "Ты помогаешь пользователю ориентироваться в его личной библиотеке сохранённых ссылок и заметок SwipeMark. Отвечай кратко (до 120 слов), на русском языке, опираясь только на список сохранений. Если по вопросу ничего релевантного — так и скажи.",
+        },
+        { role: "user", content: `Вопрос: ${q}\n\nСохранения пользователя:\n${context}` },
+      ],
+      maxTokens: 300,
+      timeoutMs: 15000,
+    });
+    await recordAiUsage(userId, "search", null, "success", ctx.model);
+    return { answer: result.content.trim(), quotaExhausted: false };
+  } catch (e) {
+    console.error("Search LLM error:", e instanceof Error ? e.message : e);
+    await recordAiUsage(userId, "search", null, "failed", ctx.model);
+    return { answer: null, quotaExhausted: false };
+  }
+}
+
 /**
  * AI-поиск: embed(запроса) → cosine top-N через RPC match_cards
  * + FTS top-M → RRF-слияние → top-20 карточек.
- * LLM-ответ — этап 3 (отдельный флаг/режим).
+ * ask=true → LLM-ответ поверх top-5 (квота kind='search', free 20/мес).
  */
 export async function POST(req: NextRequest) {
   try {
     const userId = await getSessionUser(req);
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const body = (await req.json().catch(() => ({}))) as { q?: unknown };
+    const body = (await req.json().catch(() => ({}))) as { q?: unknown; ask?: unknown };
     const q = typeof body.q === "string" ? body.q.trim().slice(0, 300) : "";
+    const ask = body.ask === true;
     if (!q) return NextResponse.json({ error: "Bad request" }, { status: 400 });
 
     const db = getAdminDb();
@@ -89,15 +141,34 @@ export async function POST(req: NextRequest) {
 
     // Проставляем score по порядку merged
     const scoreById = new Map(merged.map((m) => [m.id, m.score]));
+    const scores = Object.fromEntries(results.map((r) => [r.id, scoreById.get(r.id) ?? 0]));
+
+    // Этап 3: LLM-ответ только при ask=true
+    let answer: string | null = null;
+    let quotaExhausted = false;
+    let blocked = false;
+    if (ask) {
+      const blockedCheck = await checkAiAllowed(userId, "search");
+      if (!blockedCheck.ok && blockedCheck.reason === "blocked") blocked = true;
+      else {
+        const res2 = await answerWithLlm(userId, q, results);
+        answer = res2.answer;
+        quotaExhausted = res2.quotaExhausted;
+      }
+    }
+
     return NextResponse.json({
       q,
       results,
-      scores: Object.fromEntries(results.map((r) => [r.id, scoreById.get(r.id) ?? 0])),
+      scores,
       total: results.length,
-      answer: null, // этап 3: LLM-ответ при вопросе
+      answer,
+      quotaExhausted: ask ? quotaExhausted : false,
+      blocked,
     });
   } catch (e) {
     console.error("AI search error:", e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
+

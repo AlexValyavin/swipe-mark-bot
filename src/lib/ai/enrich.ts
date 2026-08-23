@@ -101,7 +101,8 @@ export function parseAiJson(text: string): AiSuggestion {
   return suggestion;
 }
 
-async function resolveAiContext(userId: string): Promise<{
+/** Резолвит AI-контекст: app_config → env → BYOK. Экспортирован для /api/search/ai. */
+export async function resolveAiContext(userId: string): Promise<{
   mode: EnrichMode;
   provider: AiProvider;
   apiKey: string;

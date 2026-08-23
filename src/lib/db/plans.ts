@@ -1,12 +1,13 @@
 import type { ProfileRow } from "@/lib/db/types";
 
 export type EffectivePlan = "admin" | "beta" | "pro" | "free" | "blocked";
-export type AiKind = "autosort" | "summary";
+export type AiKind = "autosort" | "summary" | "search";
 
 /** Лимиты для free; остальные планы — без лимитов (кроме blocked = 0). */
 export const FREE_LIMITS: Record<AiKind, number> = {
   autosort: 50,
   summary: 10,
+  search: 20,
 };
 
 /**
