@@ -109,32 +109,7 @@ export function SwipeDeck({
         )}
       </div>
 
-      {/* Прогресс — компактный: 3 / 11 + бар */}
-      <div className="pointer-events-none absolute top-3 left-0 right-0 flex justify-center px-4" style={{ zIndex: 30 }}>
-        <div className="w-full max-w-[300px] rounded-xl bg-black/50 px-3 py-2 backdrop-blur-sm">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-bold text-white tabular-nums">
-              {done !== undefined ? `${done} / ${total}` : `${bookmarks.length}`}
-            </span>
-            <span className="text-[11px] text-white/70">
-              {done !== undefined
-                ? bookmarks.length === 1
-                  ? t("deck.last")
-                  : `${t("deck.progress.left")} · ${bookmarks.length}`
-                : t("deck.progress.left")}
-            </span>
-          </div>
-          {done !== undefined && (
-            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/20">
-              <motion.div
-                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500"
-                animate={{ width: `${pct}%` }}
-                transition={{ type: "spring", stiffness: 200, damping: 30 }}
-              />
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Прогресс теперь в Dynamic Island header (page.tsx) — тут убран */}
 
       {/* Action buttons - Tinder style */}
       <div className="flex items-center justify-center gap-6 py-4" style={{ zIndex: 20 }}>

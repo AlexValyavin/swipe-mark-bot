@@ -113,5 +113,14 @@
 ---
 
 ## Техдолг / идеи
+
+### P0 — ближайший спринт (берём отсюда)
+1. **Экран «Позже» как «Сохранёнки»** — унифицировать с библиотекой: `page.tsx:798` сейчас вертикальный список `size-12` строк `810` с `Archive/Undo/Open`, без `grid/groupByPeriod/MaterialSheet/delete`. Сделать грид `Library:1011 xl:grid-cols-3`, группировку Сегодня/Неделя/Раньше, `open` через `MaterialSheet`, кнопки `Открыть` (`ExternalLink bg-accent/15`) + `Удалить` (красный `Trash2`), единый скролл `flex-1 overflow-y-auto hide-scrollbar` как `Library:525`, `longPress` + `bulk delete`.
+2. **«Кратко» в карточке** — `BookmarkCard:60 expanded` уже `h-[30%]/flex-1`, превью `line-clamp-2:299` → `setExpanded(true)`, `Скрыть setExpanded(false):277` внутри карточки, `requestSummary:111 if(summaryDone) return` предотвращает повторный запрос (кэш `summaryText` остаётся). Убрать дубликат `description:322` вне `expanded` блока.
+3. **Тост после свайпа → Dynamic Island (верх)** — сейчас `page.tsx:989 fixed bottom-20 z40` (разный уровень из-за `SwipeDeck:112 absolute top-3 z30` внутри колоды). Сделать меньше, прозрачнее `bg-surface/85 backdrop-blur-md`, `text-xs`, перенести в `header:623` между `⚡` и `＋` (`absolute left-1/2 -translate-x-1/2 top-[calc(env(safe-area)+8px)] z-[55]`), `AnimatePresence mode="popLayout"` `180px↔220px` морфинг.
+4. **Прогресс в Dynamic Island** — перенести `SwipeDeck:112-137` (`done/total + pct bar`) в тот же island: `lastSwipe ? toast : progress` (`page.tsx:36 pct`, `done/total`), `w-[220px] bg-black/55`, удалить оба старых позиционирования.
+
+### P1 — следом
+- Папки 2 уровня (`folders.parent_id` отсутствует — `folders.ts:1`), AI Search слот `Library:526` (только `ILIKE`), `embedding vector(768):types:114` не заполняется, квота `ai_usage 50/10` без блокировки (`0006:17`), `premium/paywall`, `PWA` install prompt.
 - На проде вернуть реальный AI-ключ и `BOT_USERNAME` в `.env.local` / env Vercel; добавить `TELEGRAM_BOT_TOKEN` (без него media-кэш не качает файлы, а webhook молчит).
 - **Фаза R, Шаг 5**: ручной прогон пересылок t.me/видео/PDF через бота (человек-шаг ТЗ).

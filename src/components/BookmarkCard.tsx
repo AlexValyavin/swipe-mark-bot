@@ -319,9 +319,6 @@ export function BookmarkCard({
             )}
           </>
         )}
-        {bookmark.description && !bookmark.aiSummary && (
-          <p className="mt-1.5 text-fs-summary text-muted">{bookmark.description}</p>
-        )}
         {bookmark.aiFolderName && bookmark.aiStatus === "done" && (
           <div className="mt-2 inline-flex items-center gap-1 rounded-lg bg-accent/15 px-2 py-1 text-xs font-medium text-accent">
             <Sparkles className="size-3" />

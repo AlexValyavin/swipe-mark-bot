@@ -974,6 +974,33 @@ export function Library({
                         <span>·</span>
                         <span>{fmtReadMinutes(b.readTimeMin, lang) || fmtDuration(b.durationSeconds) || fmtDate(b.createdAt, lang)}</span>
                       </div>
+                      <div className="mt-1 flex gap-1.5">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            telegram?.haptic.impact("medium");
+                            onOpen(b);
+                          }}
+                          className="flex flex-1 items-center justify-center gap-1 rounded-full bg-accent/15 px-3 py-1.5 text-xs font-semibold text-accent hover:bg-accent/25"
+                        >
+                          <ExternalLink className="size-3.5" /> {t("common.open")}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            telegram?.haptic.impact("medium");
+                            void fetch("/api/cards/bulk", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ cardIds: [b.id], action: "delete" }),
+                            }).then(() => load());
+                          }}
+                          className="flex size-8 items-center justify-center rounded-full bg-red-500/15 text-red-400 hover:bg-red-500/25"
+                          aria-label={t("common.delete")}
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      </div>
                     </div>
                   </button>
                 ))}
@@ -1203,6 +1230,24 @@ export function Library({
                             className="flex size-9 items-center justify-center rounded-full bg-accent/15 text-accent hover:bg-accent/25 active:scale-90"
                           >
                             <ExternalLink className="size-4" />
+                          </button>
+                        )}
+                        {!selectMode && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              telegram?.haptic.impact("medium");
+                              void fetch("/api/cards/bulk", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ cardIds: [b.id], action: "delete" }),
+                              }).then(() => load());
+                            }}
+                            aria-label={t("common.delete")}
+                            title={t("common.delete")}
+                            className="flex size-9 items-center justify-center rounded-full bg-red-500/15 text-red-400 hover:bg-red-500/25 active:scale-90"
+                          >
+                            <Trash2 className="size-4" />
                           </button>
                         )}
                       </div>

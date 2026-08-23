@@ -27,6 +27,7 @@ import { DiagnosticsSettings } from "@/components/DiagnosticsSettings";
 import { AddModal, AddButton } from "@/components/AddModal";
 import { UiScaleSettings } from "@/components/UiScaleSettings";
 import { FullscreenSettings } from "@/components/FullscreenSettings";
+import { MaterialSheet } from "@/components/MaterialSheet";
 
 type Tab = "inbox" | "library" | "later";
 
@@ -137,6 +138,7 @@ export default function Home() {
   const [undoLabel, setUndoLabel] = useState(t("undo.action.archive"));
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [navHidden, setNavHidden] = useState(false);
+  const [laterDetail, setLaterDetail] = useState<Bookmark | null>(null);
   const [twaTimeoutPassed, setTwaTimeoutPassed] = useState(false);
   const swipedOnce = useRef(false);
   const [sessionDone, setSessionDone] = useState(0);
@@ -384,6 +386,18 @@ export default function Home() {
     postAction(bookmark.id, "left");
   };
 
+  const deleteFromLater = async (bookmark: Bookmark) => {
+    telegram?.haptic.impact("medium");
+    setLater((prev) => prev.filter((b) => b.id !== bookmark.id));
+    try {
+      await fetch("/api/cards/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cardIds: [bookmark.id], action: "delete" }),
+      });
+    } catch {}
+  };
+
   const setTtl = (hours: number | null, cutoff: number | null) => {
     telegram?.haptic.selection();
     setArchiveTtlHours(hours);
@@ -620,15 +634,68 @@ export default function Home() {
   const showHint =
     tab === "inbox" && !folderDeck && deck.length > 0 && !hintDismissed;
 
+  // Dynamic Island прогресс
+  const totalForIsland = sessionDone + deck.length;
+  const pctIsland = totalForIsland > 0 ? Math.min(100, Math.round((sessionDone / totalForIsland) * 100)) : 0;
+
   return (
     <div className="app-column mx-auto flex h-dvh w-full flex-col bg-bg">
-      {/* Header */}
-      <header className="flex items-center justify-between px-5 py-3">
+      {/* Header + Dynamic Island (прогресс/тост между логотипом и плюсом) */}
+      <header className="relative flex items-center justify-between px-5 py-3">
         <div className="flex items-center gap-2.5">
           <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-lg text-white shadow-lg">
             ⚡
           </div>
         </div>
+
+        {/* Dynamic Island */}
+        <div className="pointer-events-none absolute left-1/2 top-[calc(env(safe-area-inset-top,0px)+8px)] z-[55] flex -translate-x-1/2 justify-center md:top-3">
+          <AnimatePresence mode="popLayout">
+            {lastSwipe && deck.length > 0 ? (
+              <motion.div
+                key="toast"
+                initial={{ opacity: 0, scale: 0.9, y: -8 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: -8 }}
+                transition={{ type: "spring", stiffness: 400, damping: 28 }}
+                className="pointer-events-auto flex items-center gap-2 rounded-full border border-line bg-surface/85 px-2 py-1 shadow-xl backdrop-blur-md"
+              >
+                <span className="pl-2 text-xs font-medium text-text">{undoLabel}</span>
+                <button
+                  onClick={undoLastSwipe}
+                  className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-accent-text active:scale-95"
+                >
+                  {t("undo.undo")}
+                </button>
+              </motion.div>
+            ) : tab === "inbox" && !folderDeck && deck.length > 0 ? (
+              <motion.div
+                key="progress"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="pointer-events-none w-[220px] rounded-full border border-white/10 bg-black/55 px-3 py-1.5 backdrop-blur-md"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold tabular-nums text-white">
+                    {sessionDone} / {totalForIsland}
+                  </span>
+                  <span className="text-[11px] text-white/70">
+                    {deck.length === 1 ? t("deck.last") : `${deck.length} ${t("deck.progress.left")}`}
+                  </span>
+                </div>
+                <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/20">
+                  <motion.div
+                    className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500"
+                    animate={{ width: `${pctIsland}%` }}
+                    transition={{ type: "spring", stiffness: 200, damping: 30 }}
+                  />
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        </div>
+
         <div className="flex items-center gap-2">
           <AddButton
             onOpen={() => {
@@ -805,76 +872,87 @@ export default function Home() {
               className="flex min-h-0 flex-1 flex-col"
             >
               {later.length > 0 ? (
-                <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4 hide-scrollbar">
-                  {later.map((c) => (
-                    <div
-                      key={c.id}
-                      className="group flex items-center gap-3 rounded-xl bg-surface p-3 transition-colors hover:bg-line"
-                    >
-                      {thumbFor(c) ? (
-                        <div className="relative size-12 flex-shrink-0 overflow-hidden rounded-lg bg-bg">
-                          <div className="absolute inset-0 flex items-center justify-center text-xl">
-                            {typeEmoji(c)}
+                <>
+                  <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 hide-scrollbar">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      {later.map((c) => (
+                        <div
+                          key={c.id}
+                          onClick={() => setLaterDetail(c)}
+                          className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl bg-surface transition-colors hover:bg-line active:scale-[0.98]"
+                        >
+                          <div className="relative aspect-[16/10] w-full overflow-hidden bg-bg">
+                            {thumbFor(c) ? (
+                              <img
+                                src={thumbFor(c) as string}
+                                alt=""
+                                className="size-full object-cover"
+                                onError={(e) => { e.currentTarget.style.display = "none"; }}
+                              />
+                            ) : (
+                              <div className="flex size-full items-center justify-center text-3xl">
+                                {typeEmoji(c)}
+                              </div>
+                            )}
                           </div>
-                          <img
-                            src={thumbFor(c) as string}
-                            alt=""
-                            className="absolute inset-0 size-full rounded-lg object-cover"
-                            onError={(e) => {
-                              e.currentTarget.style.display = "none";
-                            }}
-                          />
+                          <div className="flex flex-col gap-2 p-3">
+                            <p className="line-clamp-2 text-sm font-semibold leading-snug text-text">{c.title}</p>
+                            <div className="flex items-center gap-1.5 text-xs text-muted">
+                              <span className="truncate">
+                                {new Date(c.createdAt).toLocaleString(lang, {
+                                  day: "numeric",
+                                  month: "short",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                              {c.folders && c.folders.length > 0 && (
+                                <span className="truncate rounded bg-bg px-1.5 py-0.5 text-[10px] text-muted">
+                                  {c.folders[0].emoji || "📁"} {c.folders[0].name}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  telegram?.haptic.impact("medium");
+                                  openBookmark(c);
+                                }}
+                                className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-accent/15 px-3 py-2 text-xs font-semibold text-accent hover:bg-accent/25"
+                              >
+                                <ExternalLink className="size-3.5" /> {t("common.open")}
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void deleteFromLater(c);
+                                }}
+                                className="flex size-9 items-center justify-center rounded-full bg-red-500/15 text-red-400 hover:bg-red-500/25"
+                                aria-label={t("common.delete")}
+                                title={t("common.delete")}
+                              >
+                                <Trash2 className="size-4" />
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      ) : (
-                        <div className="flex size-12 flex-shrink-0 items-center justify-center rounded-lg bg-bg text-xl">
-                          {typeEmoji(c)}
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-text">
-                          {c.title}
-                        </p>
-                        <p className="mt-0.5 text-[11px] text-muted">
-                          {new Date(c.createdAt).toLocaleString(lang, {
-                            day: "numeric",
-                            month: "short",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                      </div>
-                      <div className="flex flex-shrink-0 items-center gap-1">
-                        <button
-                          onClick={() => archiveFromLater(c)}
-                          aria-label={t("deck.btn.archive")}
-                          title={t("deck.btn.archive")}
-                          className="flex size-8 items-center justify-center rounded-full bg-surface text-danger transition-colors hover:bg-line active:scale-90"
-                        >
-                          <Archive className="size-4" />
-                        </button>
-                        <button
-                          onClick={() => returnToDeck(c)}
-                          aria-label={t("library.toDeck")}
-                          title={t("library.toDeck")}
-                          className="flex size-8 items-center justify-center rounded-full bg-surface text-muted transition-colors hover:bg-line active:scale-90"
-                        >
-                          <Undo2 className="size-4" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            telegram?.haptic.impact("medium");
-                            openBookmark(c);
-                          }}
-                          aria-label={t("common.open")}
-                          title={t("common.open")}
-                          className="flex size-8 items-center justify-center rounded-full bg-accent/15 text-accent transition-colors hover:bg-accent/25 active:scale-90"
-                        >
-                          <ExternalLink className="size-4" />
-                        </button>
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                  <AnimatePresence>
+                    {laterDetail && (
+                      <MaterialSheet
+                        bookmark={laterDetail}
+                        onClose={() => setLaterDetail(null)}
+                        onOpen={(b) => {
+                          setLaterDetail(null);
+                          openBookmark(b);
+                        }}
+                      />
+                    )}
+                  </AnimatePresence>
+                </>
               ) : (
                 <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
                   <motion.div
@@ -978,26 +1056,7 @@ export default function Home() {
         </button>
       )}
 
-      {/* Undo toast */}
-      <AnimatePresence>
-        {lastSwipe && deck.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 24, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 12, scale: 0.96 }}
-            transition={{ type: "spring", stiffness: 320, damping: 26 }}
-            className="fixed bottom-20 left-1/2 z-40 -translate-x-1/2 flex items-center gap-2 rounded-full border border-line bg-surface/95 py-2 pl-4 pr-2 shadow-2xl backdrop-blur-sm"
-          >
-            <span className="text-fs-sm text-text">{undoLabel}</span>
-            <button
-              onClick={undoLastSwipe}
-              className="rounded-full bg-accent px-3 py-1 text-fs-sm font-semibold text-accent-text transition-colors active:scale-95"
-            >
-              {t("undo.undo")}
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Undo toast теперь в Dynamic Island (header) */}
 
       {/* Add modal */}
       <AnimatePresence>
