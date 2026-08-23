@@ -5,26 +5,7 @@ import { X, ExternalLink, Folder, Tag, Sparkles } from "lucide-react";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 import { useI18n } from "@/components/I18nProvider";
 import { SourceBadge } from "@/components/SourceBadge";
-import { getOpenTarget } from "@/lib/openTarget";
-
-function thumbFor(c: Bookmark): string | null {
-  return c.imageUrl || c.mediaItems?.[0]?.imageUrl || null;
-}
-
-function typeEmoji(c: Bookmark): string {
-  if (c.type === "photo") return "📷";
-  if (c.type === "video") return "🎬";
-  if (c.type === "text") return "📝";
-  if (c.type === "forward") return "📨";
-  return "🔗";
-}
-
-function fmtDuration(sec?: number | null): string | null {
-  if (!sec || sec <= 0) return null;
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
+import { thumbFor, typeEmoji, fmtDuration } from "@/lib/format";
 
 export function MaterialSheet({
   bookmark,
@@ -35,9 +16,8 @@ export function MaterialSheet({
   onClose: () => void;
   onOpen: (b: Bookmark) => void;
 }) {
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const thumb = thumbFor(bookmark);
-  const openTarget = getOpenTarget(bookmark);
 
   // Fallback breadcrumb: first folder or "Сохранёнки"
   const folderLabel =

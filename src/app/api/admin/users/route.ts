@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
 
     const enriched = await Promise.all(
-      (profiles ?? []).map(async (p: any) => {
+      (profiles ?? []).map(async (p: { id: string; updated_at: string }) => {
         const [cardsRes, foldersRes, usageRes] = await Promise.all([
           db.from("cards").select("id, created_at", { count: "exact", head: true }).eq("user_id", p.id),
           db.from("card_folders").select("card_id").in("card_id", ((await db.from("cards").select("id").eq("user_id", p.id)).data?.map((c: { id: string }) => c.id) ?? ["00000000-0000-0000-0000-000000000000"])),
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
         const summaryUsed = (usageRes.data ?? []).filter((u: { kind: string; status: string }) => u.kind === "summary" && u.status !== "failed").length;
 
         // последняя активность = max(cards.created_at, updated_at)
-        const lastActivity = (p as { updated_at: string }).updated_at;
+        const lastActivity = p.updated_at;
 
         return {
           ...p,

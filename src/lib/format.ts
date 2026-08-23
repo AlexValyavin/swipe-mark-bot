@@ -48,3 +48,15 @@ export function groupByPeriod<T extends { createdAt: string }>(list: T[]): {
   if (earlier.length) groups.push({ label: "Раньше", items: earlier });
   return groups;
 }
+
+export function thumbFor(c: { imageUrl?: string | null; mediaItems?: { imageUrl?: string }[] | null }): string | null {
+  return c.imageUrl || c.mediaItems?.[0]?.imageUrl || null;
+}
+
+export function typeEmoji(c: { type?: string }): string {
+  if (c.type === "photo") return "📷";
+  if (c.type === "video") return "🎬";
+  if (c.type === "text") return "📝";
+  if (c.type === "forward") return "📨";
+  return "🔗";
+}

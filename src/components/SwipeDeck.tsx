@@ -13,7 +13,6 @@ export function SwipeDeck({
   onSwipe,
   onOpen,
   onRetry,
-  done,
   showHint,
   swipeCount,
 }: {
@@ -21,6 +20,7 @@ export function SwipeDeck({
   onSwipe: (direction: SwipeDirection, bookmark: Bookmark) => void;
   onOpen: (bookmark: Bookmark) => void;
   onRetry?: (bookmark: Bookmark) => void;
+  /** Прогресс отображается в Dynamic Island (page.tsx); prop оставлен для совместимости вызовов. */
   done?: number;
   showHint?: boolean;
   swipeCount?: number;
@@ -33,8 +33,6 @@ export function SwipeDeck({
   if (bookmarks.length === 0) return null;
 
   const current = bookmarks[0];
-  const total = (done ?? 0) + bookmarks.length;
-  const pct = total > 0 ? Math.min(100, Math.round(((done ?? 0) / total) * 100)) : 0;
   const showLabels = (swipeCount ?? 0) < 3;
 
   const handleSwipe = (direction: SwipeDirection) => {

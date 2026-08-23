@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { isOwner } from "@/lib/auth/owner";
 import { decryptSecret } from "@/lib/crypto";
 import { getGlobalAiRaw } from "@/lib/db/appConfig";
@@ -36,7 +35,7 @@ export async function POST(req: NextRequest) {
     let apiKey: string | null = null;
     let provider: AiProvider = (raw?.provider as AiProvider) ?? "openrouter";
     let model: string | null = raw?.model ?? null;
-    let baseUrl: string | undefined = raw?.baseUrl ?? undefined;
+    const baseUrl: string | undefined = raw?.baseUrl ?? undefined;
 
     if (raw?.keyEnc) {
       try { apiKey = decryptSecret(raw.keyEnc); } catch {}

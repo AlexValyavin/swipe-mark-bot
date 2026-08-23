@@ -7,7 +7,7 @@ export default function AdminLoginPage() {
   const [code, setCode] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [deepLink, setDeepLink] = useState<string | null>(null);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(0);
   const [linked, setLinked] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
@@ -26,12 +26,17 @@ export default function AdminLoginPage() {
     }
   };
 
-  useEffect(() => { void generate(); }, []);
-
-  // tick для отсчёта
+  // tick для отсчёта + первичная генерация кода
   useEffect(() => {
+    const first = setTimeout(() => {
+      setNow(Date.now());
+      void generate();
+    }, 0);
     const t = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(t);
+    return () => {
+      clearTimeout(first);
+      window.clearInterval(t);
+    };
   }, []);
 
   const expiresIn = expiresAt ? Math.max(0, Math.ceil((new Date(expiresAt).getTime() - now) / 1000)) : 0;

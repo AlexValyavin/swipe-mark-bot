@@ -4,9 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Inbox,
-  Archive,
   RefreshCw,
-  Undo2,
   ExternalLink,
   Clock,
   Trash2,
@@ -20,6 +18,7 @@ import { initClientAnalytics, trackClient } from "@/lib/analyticsClient";
 import { SwipeDeck } from "@/components/SwipeDeck";
 import type { SwipeDirection } from "@/components/BookmarkCard";
 import { getOpenTarget } from "@/lib/openTarget";
+import { thumbFor, typeEmoji } from "@/lib/format";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 import { Library } from "@/components/Library";
 import { PairingSettings } from "@/components/PairingSettings";
@@ -77,18 +76,6 @@ function computeLists(all: Bookmark[]) {
     }),
     archived: all.filter((b) => (b.status || "new") === "archived"),
   };
-}
-
-function typeEmoji(c: Bookmark): string {
-  if (c.type === "photo") return "📷";
-  if (c.type === "video") return "🎬";
-  if (c.type === "text") return "📝";
-  if (c.type === "forward") return "📨";
-  return "🔗";
-}
-
-function thumbFor(c: Bookmark): string | null {
-  return c.imageUrl || c.mediaItems?.[0]?.imageUrl || null;
 }
 
 export default function Home() {
@@ -377,13 +364,6 @@ export default function Home() {
     setArchived((prev) => prev.filter((b) => b.id !== bookmark.id));
     setLater((prev) => [...prev.filter((b) => b.id !== bookmark.id), bookmark]);
     postAction(bookmark.id, "later");
-  };
-
-  const archiveFromLater = (bookmark: Bookmark) => {
-    telegram?.haptic.impact("medium");
-    setLater((prev) => prev.filter((b) => b.id !== bookmark.id));
-    setArchived((prev) => [...prev, bookmark]);
-    postAction(bookmark.id, "left");
   };
 
   const deleteFromLater = async (bookmark: Bookmark) => {

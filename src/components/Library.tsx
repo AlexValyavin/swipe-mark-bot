@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Plus,
-  RefreshCw,
   Search,
   X,
   Trash2,
@@ -29,6 +28,7 @@ import { useI18n } from "@/components/I18nProvider";
 import { SourceBadge, MetaStatusDot } from "@/components/SourceBadge";
 import { MaterialSheet } from "@/components/MaterialSheet";
 import { trackClient } from "@/lib/analyticsClient";
+import { thumbFor, typeEmoji } from "@/lib/format";
 
 export type FolderMeta = {
   id: string;
@@ -112,16 +112,10 @@ export function Library({
   const [folderId, setFolderId] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [tagsOpen, setTagsOpen] = useState(false);
   const [availableTags, setAvailableTags] = useState<{ id: string; name: string; count: number }[]>([]);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [folders, setFolders] = useState<FolderMeta[]>([]);
   const [unsortedCount, setUnsortedCount] = useState(0);
-  const [tabCounts, setTabCounts] = useState<{
-    inDeck: number;
-    readLater: number;
-    archived: number;
-  }>({ inDeck: 0, readLater: 0, archived: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -201,11 +195,6 @@ export function Library({
         }))
       );
       setUnsortedCount(Number(data.counts?.unsorted ?? 0));
-      setTabCounts({
-        inDeck: Number(data.counts?.inDeck ?? 0),
-        readLater: Number(data.counts?.readLater ?? 0),
-        archived: Number(data.counts?.archived ?? 0),
-      });
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("app.error.load"));
@@ -219,7 +208,6 @@ export function Library({
       void loadTags();
     }, 0);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -249,11 +237,6 @@ export function Library({
     }
     if (!q.trim()) searchRef.current = "";
   }, [q]);
-
-  const refresh = () => {
-    telegram?.haptic.selection();
-    load();
-  };
 
   const createFolder = async (name: string, emoji: string) => {
     const res = await fetch("/api/folders", {
@@ -336,12 +319,6 @@ export function Library({
     const cur = card.tags?.map((tag) => tag.name) ?? [];
     const next = cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name];
     setTagMenuCard({ ...card, tags: next.map((n) => ({ id: "tmp-" + n, name: n })) });
-  };
-
-  const removeSingleTag = async (card: Bookmark, tag: { id: string; name: string }) => {
-    await fetch(`/api/cards/${card.id}/tags/${tag.id}`, { method: "DELETE" });
-    telegram?.haptic.selection();
-    await Promise.all([load(), loadTags()]);
   };
 
   const acceptAi = async (card: Bookmark) => {
@@ -482,19 +459,6 @@ export function Library({
   const massAddTag = async (name: string) => {
     await runBulk("addTag", { names: [name] });
   };
-
-  const tabs: { key: LibraryTab; label: string }[] = [
-    { key: "deck", label: t("library.tab.deck") },
-    { key: "later", label: t("library.tab.later") },
-  ];
-
-  const activeFolders = useMemo(
-    () =>
-      folders.filter((f) =>
-        tab === "archive" ? true : f.count > 0
-      ),
-    [folders, tab]
-  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -1347,18 +1311,6 @@ export function Library({
       </AnimatePresence>
     </div>
   );
-}
-
-function thumbFor(c: Bookmark): string | null {
-  return c.imageUrl || c.mediaItems?.[0]?.imageUrl || null;
-}
-
-function typeEmoji(c: Bookmark): string {
-  if (c.type === "photo") return "📷";
-  if (c.type === "video") return "🎬";
-  if (c.type === "text") return "📝";
-  if (c.type === "forward") return "📨";
-  return "🔗";
 }
 
 function CreateFolderModal({
