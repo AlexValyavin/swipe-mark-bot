@@ -203,7 +203,11 @@ export const en = {
   // AutosortSheet
   "autosort.title": "Sort with AI",
   "autosort.queueCount": "Cards without folder: {count}",
-  "autosort.desc": "AI will distribute cards across your folders and suggest tags. Each card is one request to your key.",
+  "autosort.desc": "AI will distribute cards across your folders and suggest tags.",
+  "autosort.quotaLeft": "{count} of 50 AI sorts left this month",
+  "autosort.quotaExhausted": "Monthly AI sort limit reached.",
+  "autosort.quotaResets": "Resets on the 1st.",
+  "autosort.quotaBlock": "Limit reached",
   "autosort.start": "Distribute",
   "autosort.starting": "Starting…",
   "autosort.progress": "Processed {done} of {total}",

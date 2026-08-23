@@ -54,6 +54,7 @@ export function BookmarkCard({
   const [summaryText, setSummaryText] = useState<string | null>(null);
   const [summaryDone, setSummaryDone] = useState(false);
   const [aiAvailable, setAiAvailable] = useState<boolean | null>(null);
+  const [summaryQuotaLeft, setSummaryQuotaLeft] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(false);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setExpanded(false); }, [bookmark.id]);
@@ -100,6 +101,15 @@ export function BookmarkCard({
         }
       })
       .catch(() => !cancelled && setAiAvailable(false));
+    // Квота саммари: скрываем кнопку при 0
+    fetch("/api/ai/quota")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && typeof data?.summary?.left === "number") {
+          setSummaryQuotaLeft(data.summary.left);
+        }
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -344,7 +354,7 @@ export function BookmarkCard({
             ))}
           </div>
         ) : null}
-        {!bookmark.aiSummary && !summaryDone && aiAvailable && (
+        {!bookmark.aiSummary && !summaryDone && aiAvailable && summaryQuotaLeft !== 0 && (
           <div className="mt-2">
             {summaryLoading ? (
               <div className="flex items-center gap-2 rounded-lg bg-surface px-3 py-2">

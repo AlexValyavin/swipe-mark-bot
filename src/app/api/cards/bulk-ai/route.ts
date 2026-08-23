@@ -5,6 +5,7 @@ import { getAdminDb } from "@/lib/db/supabase";
 import { enrichCard } from "@/lib/ai/enrich";
 import { createBulkJob, getBulkJob, updateBulkJob, bulkJobStatusToClient } from "@/lib/db/jobs";
 import { track } from "@/lib/analytics";
+import { checkAiAllowed, recordAiUsage, isGlobalAiActiveAsync } from "@/lib/ai/quota";
 
 export const runtime = "nodejs";
 const MAX_BULK = 30;
@@ -68,6 +69,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ jobId: null, total: 0, done: 0, failed: 0, status: "done" });
     }
 
+    // Квота (только на глобальном ключе; BYOK не ограничиваем)
+    let quotaLeft: number | null = null;
+    if (await isGlobalAiActiveAsync()) {
+      const check = await checkAiAllowed(userId, "autosort");
+      if (!check.ok) {
+        if (check.reason === "blocked") {
+          return NextResponse.json(
+            { error: "AI отключён для этого аккаунта", code: "blocked" },
+            { status: 403 }
+          );
+        }
+        return NextResponse.json(
+          {
+            error: "Лимит AI-разборов на этот месяц исчерпан",
+            code: "quota",
+            resetsAt: check.quota.resetsAt,
+            used: check.quota.autosort.used,
+          },
+          { status: 429 }
+        );
+      }
+      quotaLeft = check.quota.autosort.left;
+      if (quotaLeft !== null && quotaLeft < cardIds.length) {
+        // Обрезаем до остатка — частичный запуск
+        cardIds = cardIds.slice(0, quotaLeft);
+      }
+    }
+
     const job = await createBulkJob(userId, cardIds.length);
     void track("ai_sort_requested", userId, {
       scope: body.scope === "unsorted" ? "unsorted" : "selected",
@@ -82,11 +111,14 @@ export async function POST(req: NextRequest) {
         for (let i = 0; i < cardIds.length; i += CHUNK_SIZE) {
           const chunk = cardIds.slice(i, i + CHUNK_SIZE);
           const results = await Promise.allSettled(chunk.map((id) => enrichCard(userId, id)));
-          for (const r of results) {
+          for (let j = 0; j < results.length; j++) {
+            const r = results[j];
             if (r.status === "fulfilled" && r.value.status === "done") {
               done++;
+              await recordAiUsage(userId, "autosort", chunk[j], "success");
             } else {
               failed++;
+              await recordAiUsage(userId, "autosort", chunk[j], "failed");
             }
           }
           const current = await getBulkJob(userId, job.id);

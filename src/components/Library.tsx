@@ -1697,6 +1697,7 @@ function AutosortSheet({
   const telegram = useTelegram();
   const { t } = useI18n();
   const [starting, setStarting] = useState(false);
+  const [quotaLeft, setQuotaLeft] = useState<number | null>(null);
   const [job, setJob] = useState<{
     jobId: string | null;
     status: string;
@@ -1705,6 +1706,23 @@ function AutosortSheet({
     failed: number;
   } | null>(null);
   const pollRef = useRef<number | null>(null);
+
+  // Квота при открытии sheet
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch("/api/ai/quota");
+          if (!res.ok) return;
+          const data = await res.json();
+          setQuotaLeft(typeof data?.autosort?.left === "number" ? data.autosort.left : null);
+        } catch {}
+      })();
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
+
+  const quotaExhausted = quotaLeft !== null && quotaLeft <= 0;
 
   const stopPolling = () => {
     if (pollRef.current !== null) {
@@ -1813,6 +1831,15 @@ function AutosortSheet({
             <p className="mt-4 rounded-xl bg-bg px-4 py-3 text-sm text-muted">
               {t("autosort.desc")}
             </p>
+            {quotaLeft !== null && (
+              <p className={`mt-2 rounded-xl px-4 py-2.5 text-xs font-medium ${quotaExhausted ? "bg-red-500/10 text-red-400" : "bg-bg text-muted"}`}>
+                {quotaExhausted
+                  ? t("autosort.quotaExhausted")
+                  : t("autosort.quotaLeft", { count: quotaLeft })}
+                {" · "}
+                {t("autosort.quotaResets")}
+              </p>
+            )}
             <div className="mt-5 flex gap-2.5">
               <button
                 onClick={onClose}
@@ -1822,9 +1849,10 @@ function AutosortSheet({
               </button>
               <button
                 onClick={() => void start()}
-                className="flex-1 rounded-full bg-accent py-2.5 text-sm font-semibold text-accent-text active:scale-[0.98]"
+                disabled={count <= 0 || quotaExhausted}
+                className="flex-1 rounded-full bg-accent py-2.5 text-sm font-semibold text-accent-text active:scale-[0.98] disabled:opacity-50"
               >
-                {t("autosort.start")}{count > 0 ? ` (${count})` : ""}
+                {quotaExhausted ? t("autosort.quotaBlock") : t("autosort.start")}{!quotaExhausted && count > 0 ? ` (${Math.min(count, quotaLeft ?? count)})` : ""}
               </button>
             </div>
           </>

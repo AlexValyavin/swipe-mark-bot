@@ -203,7 +203,11 @@ export const ru = {
   // AutosortSheet
   "autosort.title": "Разложить с AI",
   "autosort.queueCount": "Карточек без папки: {count}",
-  "autosort.desc": "ИИ распределит карточки по твоим папкам и предложит теги. Каждая карточка — один запрос к твоему ключу.",
+  "autosort.desc": "ИИ распределит карточки по твоим папкам и предложит теги.",
+  "autosort.quotaLeft": "Осталось AI-разборов в этом месяце: {count} из 50",
+  "autosort.quotaExhausted": "Лимит AI-разборов на этот месяц закончился.",
+  "autosort.quotaResets": "Обновится 1 числа.",
+  "autosort.quotaBlock": "Лимит исчерпан",
   "autosort.start": "Распределить",
   "autosort.starting": "Запускаем…",
   "autosort.progress": "Обработано {done} из {total}",
