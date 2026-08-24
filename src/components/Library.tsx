@@ -39,7 +39,7 @@ export type FolderMeta = {
   sortOrder: number;
 };
 
-type LibraryTab = "deck" | "later" | "archive";
+type LibraryTab = "all" | "deck" | "later" | "archive";
 
 /** Группировка по дате: Сегодня / На этой неделе / Раньше. */
 function groupByPeriod(list: Bookmark[], labels: { today: string; week: string; earlier: string }) {
@@ -109,7 +109,9 @@ export function Library({
 }: Props) {
   const telegram = useTelegram();
   const { t, tp, lang } = useI18n();
-  const [tab, setTab] = useState<LibraryTab>("deck");
+  // "all" = вся библиотека без фильтра по статусу (счётчики папок считают все карточки —
+  // список должен совпадать, иначе внутри папки пусто при непустом счётчике)
+  const [tab, setTab] = useState<LibraryTab>("all");
   const [folderId, setFolderId] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -1658,6 +1660,7 @@ function FiltersSheet({
         <div className="mt-2 flex items-center rounded-xl bg-bg p-1">
           {(
             [
+              { key: "all", label: t("library.chip.all") },
               { key: "deck", label: t("library.tab.deck") },
               { key: "later", label: t("library.tab.later") },
               { key: "archive", label: t("library.tab.archive") },

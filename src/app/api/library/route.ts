@@ -67,6 +67,7 @@ async function getCounts(userId: string): Promise<Counts> {
 }
 
 const TABS: Record<string, string[]> = {
+  all: ["new", "later", "archived", "done"],
   deck: ["new", "later"],
   later: ["later"],
   archive: ["archived"],
