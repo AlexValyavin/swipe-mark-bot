@@ -534,7 +534,7 @@ export async function getCountsForUser(userId: string): Promise<UserCounts> {
     .from("cards")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
-    .in("status", ["new", "later"]);
+    .in("status", ["new", "later", "done"]);
   const unsorted = Math.max((uErr ? 0 : unsortedTotal ?? 0) - excluded.size, 0);
 
   return { inDeck, readLater, archived, unsorted };

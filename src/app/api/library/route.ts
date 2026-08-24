@@ -21,7 +21,7 @@ async function getUnsortedCount(userId: string): Promise<number> {
     .from("cards")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
-    .in("status", ["new", "later"]);
+    .in("status", ["new", "later", "done"]);
   if (error) return 0;
   return Math.max((count ?? 0) - excluded.size, 0);
 }

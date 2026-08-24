@@ -20,7 +20,7 @@ async function findUnsortedCardIds(userId: string): Promise<string[]> {
     .from("cards")
     .select("id")
     .eq("user_id", userId)
-    .in("status", ["new", "later"])
+    .in("status", ["new", "later", "done"])
     .order("created_at", { ascending: false });
   if (error) throw error;
 

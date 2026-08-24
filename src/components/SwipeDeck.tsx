@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
-import { X, Check, Clock } from "lucide-react";
+import { X, Check, ExternalLink } from "lucide-react";
 import { BookmarkCard, type SwipeDirection } from "@/components/BookmarkCard";
 import type { Bookmark } from "@/app/api/bookmarks/route";
 import { useTelegram } from "@/components/TelegramProvider";
@@ -131,32 +131,32 @@ export function SwipeDeck({
           <button
             onClick={() => {
               telegram?.haptic.impact("heavy");
-              handleSwipe("right");
+              onOpen(current);
             }}
-            aria-label={t("deck.btn.keep")}
-            title={t("deck.btn.keep")}
-            className="flex size-16 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 transition-transform active:scale-90"
+            aria-label={t("deck.btn.open")}
+            title={t("deck.btn.open")}
+            className="flex size-16 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-purple-500/40 transition-transform active:scale-90"
           >
-            <Check className="size-7 stroke-[3]" />
+            <ExternalLink className="size-7" />
           </button>
           {showLabels && (
-            <span className="text-[11px] font-medium text-muted">{t("deck.btn.keep")}</span>
+            <span className="text-[11px] font-medium text-muted">{t("deck.btn.open")}</span>
           )}
         </div>
         <div className="flex flex-col items-center gap-1.5">
           <button
             onClick={() => {
-              telegram?.haptic.impact("light");
-              handleSwipe("up");
+              telegram?.haptic.impact("heavy");
+              handleSwipe("right");
             }}
-            aria-label={t("deck.btn.later")}
-            title={t("deck.btn.later")}
-            className="flex size-14 items-center justify-center rounded-full border-2 border-amber-400/40 bg-surface text-amber-400 transition-transform active:scale-90"
+            aria-label={t("deck.btn.keep")}
+            title={t("deck.btn.keep")}
+            className="flex size-14 items-center justify-center rounded-full border-2 border-emerald-400/40 bg-surface text-emerald-400 transition-transform active:scale-90"
           >
-            <Clock className="size-6" />
+            <Check className="size-7 stroke-[3]" />
           </button>
           {showLabels && (
-            <span className="text-[11px] font-medium text-muted">{t("deck.btn.later")}</span>
+            <span className="text-[11px] font-medium text-muted">{t("deck.btn.keep")}</span>
           )}
         </div>
       </div>
