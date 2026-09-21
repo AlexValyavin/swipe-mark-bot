@@ -370,10 +370,12 @@ export async function getByIds(
 ): Promise<Bookmark[]> {
   if (ids.length === 0) return [];
   const db = getAdminDb();
+  // ВАЖНО: именно .in, а не .eq — .eq с массивом склеивает id через запятую
+  // (id=eq.a,b), PostgREST отвечает 400 и роняет весь запрос.
   const { data: cards, error } = await db
     .from("cards")
     .select("*")
-    .eq("id", ids.length > 100 ? ids.slice(0, 100) : ids)
+    .in("id", ids.length > 100 ? ids.slice(0, 100) : ids)
     .eq("user_id", userId);
   assertNoError(error);
   const loaded = await Promise.all((cards ?? []).map((c) => loadBookmark(c as CardRow)));
