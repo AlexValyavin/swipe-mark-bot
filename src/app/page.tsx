@@ -763,13 +763,11 @@ export default function Home() {
   const showHint =
     tab === "inbox" && !folderDeck && deck.length > 0 && !hintDismissed;
 
-  // «Есть 10 минут?»: inbox пуст, всё разложено (unsorted === 0, counts загружены).
+  // «Есть 10 минут?»: колода разбора пуста. Папки не требуем:
+  // done-карточки без папки — тоже кандидаты для чтения (Вариант A).
   const recAvailable =
-    tab === "inbox" &&
-    !folderDeck &&
-    deck.length === 0 &&
-    bookmarks.length > 0 &&
-    (counts?.unsorted ?? -1) === 0;
+    tab === "inbox" && !folderDeck && deck.length === 0 && bookmarks.length > 0;
+  const unsortedLeft = counts?.unsorted ?? 0;
 
   // Dynamic Island прогресс
   const totalForIsland = sessionDone + deck.length;
@@ -979,6 +977,17 @@ export default function Home() {
                       >
                         {t("recommend.trigger", { minutes: recMinutes })}
                       </button>
+                      {unsortedLeft > 0 && (
+                        <button
+                          onClick={() => {
+                            telegram?.haptic.selection();
+                            setTab("library");
+                          }}
+                          className="text-xs font-medium text-muted hover:text-text transition-colors"
+                        >
+                          {t("recommend.unsorted", { count: unsortedLeft })}
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           telegram?.haptic.selection();

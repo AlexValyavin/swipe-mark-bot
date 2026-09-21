@@ -317,6 +317,7 @@ export const ru = {
 
   // «Есть 10 минут?» (режим чтения)
   "recommend.trigger": "⚡ {minutes} мин · Для тебя",
+  "recommend.unsorted": "Неразложенных: {count} → Разложить",
   "recommend.change": "Другое время",
   "recommend.title": "Сколько времени?",
   "recommend.subtitle": "Подберу подходящее из твоих сохранёнок",

@@ -317,6 +317,7 @@ export const en = {
 
   // "Got 10 minutes?" (reading mode)
   "recommend.trigger": "⚡ {minutes} min · For you",
+  "recommend.unsorted": "Unsorted: {count} → Sort",
   "recommend.change": "Another time",
   "recommend.title": "How much time?",
   "recommend.subtitle": "I'll pick something fitting from your saves",
