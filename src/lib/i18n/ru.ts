@@ -315,6 +315,17 @@ export const ru = {
   "diag.empty": "Сбоев нет. Все карточки обработаны.",
   "diag.noLink": "(без ссылки)",
 
+  // «Есть 10 минут?» (режим чтения)
+  "recommend.trigger": "⚡ {minutes} мин · Для тебя",
+  "recommend.change": "Другое время",
+  "recommend.title": "Сколько времени?",
+  "recommend.subtitle": "Подберу подходящее из твоих сохранёнок",
+  "recommend.loading": "Подбираю…",
+  "recommend.empty": "Под это время ничего не подошло — попробуй другое",
+  "recommend.more": "Ещё 5 минут?",
+  "recommend.finished": "Это всё на сейчас — возвращайся, когда будет время",
+  "recommend.finish": "Закончить",
+
   // SourceBadge
   "source.extracting": "Извлекаем метаданные…",
   "source.failed": "Не удалось получить метаданные",

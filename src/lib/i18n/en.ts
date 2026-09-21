@@ -315,6 +315,17 @@ export const en = {
   "diag.empty": "No failures. All cards are processed.",
   "diag.noLink": "(no link)",
 
+  // "Got 10 minutes?" (reading mode)
+  "recommend.trigger": "⚡ {minutes} min · For you",
+  "recommend.change": "Another time",
+  "recommend.title": "How much time?",
+  "recommend.subtitle": "I'll pick something fitting from your saves",
+  "recommend.loading": "Picking…",
+  "recommend.empty": "Nothing fits this time — try another",
+  "recommend.more": "Another 5 minutes?",
+  "recommend.finished": "That's all for now — come back when you have time",
+  "recommend.finish": "Done",
+
   // SourceBadge
   "source.extracting": "Extracting metadata…",
   "source.failed": "Could not get metadata",

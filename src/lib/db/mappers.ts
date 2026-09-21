@@ -1,4 +1,5 @@
 import type { AttachmentRow, CardLinkRow, CardRow } from "@/lib/db/types";
+import { estimateMinutes } from "@/lib/estimate";
 
 export interface BookmarkMediaItem {
   type: string;
@@ -67,10 +68,13 @@ function estimateReadMinutes(card: CardRow, description?: string | null): number
   if (card.estimated_minutes != null && card.estimated_minutes > 0) {
     return Math.max(1, Math.round(card.estimated_minutes));
   }
-  const content = [description, card.text, card.title].filter(Boolean).join(" ");
-  const words = content.trim().split(/\s+/).filter(Boolean).length;
-  if (words < 40) return null;
-  return Math.max(1, Math.ceil(words / 200));
+  return estimateMinutes({
+    title: card.title,
+    text: card.text,
+    description,
+    durationSeconds: card.duration_seconds,
+    kind: card.primary_type,
+  });
 }
 
 export function cardToBookmark(

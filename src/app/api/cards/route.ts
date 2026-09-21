@@ -4,6 +4,7 @@ import { getSessionUser } from "@/lib/session";
 import { getAdminDb } from "@/lib/db/supabase";
 import { countCardsForUser, createCard, normalizeUrl } from "@/lib/db/cards";
 import { track } from "@/lib/analytics";
+import { estimateMinutes } from "@/lib/estimate";
 
 export const runtime = "nodejs";
 const MAX_URLS = 20;
@@ -75,13 +76,17 @@ export async function POST(req: NextRequest) {
         duplicates.push(url);
         continue;
       }
+      const title = deriveTitle(url);
       const cardId = await createCard(userId, {
         source_type: "link",
         primary_type: "link",
         source_url: url,
         canonical_url: url,
         domain: domainOf(url),
-        title: deriveTitle(url),
+        title,
+        // Ссылка из мини-приложения: текста ещё нет — обычно null (неизвестно).
+        // Длительность/текст подтянет meta-enrich в фоне.
+        estimated_minutes: estimateMinutes({ title, kind: "link" }),
       }, [], [{ url }]);
       known.add(url);
       created.push(cardId);

@@ -137,6 +137,20 @@ export default function Home() {
     return Number(localStorage.getItem("swipe-count") || 0);
   });
 
+  // --- «Есть 10 минут?» (режим чтения, только когда всё разобрано) ---
+  const [timeOpen, setTimeOpen] = useState(false);
+  const [recMinutes, setRecMinutes] = useState<number>(() => {
+    if (typeof window === "undefined") return 10;
+    const v = Number(window.localStorage.getItem("rec-minutes") || 10);
+    return v === 5 || v === 10 || v === 15 || v === 30 ? v : 10;
+  });
+  const [recQueue, setRecQueue] = useState<Bookmark[]>([]);
+  const [recLoading, setRecLoading] = useState(false);
+  const [recActive, setRecActive] = useState(false);
+  const [recFinished, setRecFinished] = useState(false);
+  const recExcludeRef = useRef<string[]>([]);
+  const recShownRef = useRef(0);
+
   const isMiniApp = !!twa;
   const user = twa?.initDataUnsafe?.user;
   const initData = twa?.initData;
@@ -270,6 +284,137 @@ export default function Home() {
       if (!res) loadBookmarks();
     }
   };
+
+  // --- «Есть 10 минут?»: пачки рекомендаций и сессия чтения ---
+  const fetchRecBatch = async (minutes: number, exclude: string[]): Promise<Bookmark[]> => {
+    try {
+      const res = await fetch(
+        `/api/recommend?minutes=${minutes}&exclude=${encodeURIComponent(exclude.join(","))}&limit=6`
+      );
+      if (!res.ok) return [];
+      const data = await res.json();
+      return ((data.items ?? []) as Array<{ bookmark: Bookmark }>).map(
+        (i) => i.bookmark
+      );
+    } catch {
+      return [];
+    }
+  };
+
+  const startRecSession = async (minutes: number) => {
+    telegram?.haptic.selection();
+    setRecMinutes(minutes);
+    try {
+      window.localStorage.setItem("rec-minutes", String(minutes));
+    } catch {
+      // localStorage может быть недоступен — игнорируем
+    }
+    setTimeOpen(false);
+    setRecLoading(true);
+    setRecFinished(false);
+    recExcludeRef.current = [];
+    recShownRef.current = 0;
+    trackClient("recommendation_session_started", { minutes });
+    trackClient("time_filter_selected", { selected_time: minutes });
+    const batch = await fetchRecBatch(minutes, []);
+    recExcludeRef.current = batch.map((b) => b.id);
+    setRecQueue(batch);
+    setRecActive(true);
+    setRecLoading(false);
+    if (batch.length > 0) {
+      trackClient("recommended_item_shown", { minutes });
+    } else {
+      setRecFinished(true);
+    }
+  };
+
+  const appendMoreRec = async (): Promise<Bookmark[]> => {
+    const more = await fetchRecBatch(recMinutes, recExcludeRef.current);
+    const fresh = more.filter((b) => !recExcludeRef.current.includes(b.id));
+    recExcludeRef.current.push(...fresh.map((b) => b.id));
+    return fresh;
+  };
+
+  const handleRecSwipe = (direction: SwipeDirection, bookmark: Bookmark) => {
+    trackClient(
+      direction === "right"
+        ? "recommended_item_completed"
+        : direction === "up"
+          ? "recommended_item_snoozed"
+          : "recommended_item_archived",
+      { minutes: recMinutes }
+    );
+    recShownRef.current += 1;
+    if (!recExcludeRef.current.includes(bookmark.id)) {
+      recExcludeRef.current.push(bookmark.id);
+    }
+    const next = recQueue.filter((b) => b.id !== bookmark.id);
+    setRecQueue(next);
+    if (next.length === 0) {
+      // Пачка кончилась — догружаем; если пусто — финиш сессии.
+      setRecLoading(true);
+      void (async () => {
+        const fresh = await appendMoreRec();
+        setRecLoading(false);
+        if (fresh.length > 0) {
+          setRecQueue(fresh);
+          trackClient("recommended_item_shown", { minutes: recMinutes });
+        } else {
+          trackClient("recommendation_session_finished", {
+            minutes: recMinutes,
+            shown: recShownRef.current,
+          });
+          setRecFinished(true);
+        }
+      })();
+    } else if (next.length <= 2) {
+      // Префетч следующей пачки в фоне.
+      void (async () => {
+        const fresh = await appendMoreRec();
+        if (fresh.length > 0) {
+          setRecQueue((prev) => {
+            const known = new Set(prev.map((b) => b.id));
+            return [...prev, ...fresh.filter((b) => !known.has(b.id))];
+          });
+        }
+      })();
+    }
+    void handleSwipe(direction, bookmark);
+  };
+
+  const openRecBookmark = (bookmark: Bookmark) => {
+    trackClient("recommended_item_opened", { minutes: recMinutes });
+    openBookmark(bookmark);
+  };
+
+  const moreAfterFinish = async () => {
+    telegram?.haptic.selection();
+    setRecLoading(true);
+    const fresh = await appendMoreRec();
+    setRecLoading(false);
+    if (fresh.length > 0) {
+      setRecQueue(fresh);
+      setRecFinished(false);
+      trackClient("recommended_item_shown", { minutes: recMinutes });
+    }
+  };
+
+  const closeRecSession = () => {
+    telegram?.haptic.selection();
+    setRecActive(false);
+    setRecQueue([]);
+    setRecFinished(false);
+    recExcludeRef.current = [];
+  };
+
+  const recMinutesLabel = (m: number) =>
+    m >= 30
+      ? lang === "en"
+        ? "30+ min"
+        : "30+ мин"
+      : lang === "en"
+        ? `${m} min`
+        : `${m} мин`;
 
   const showUndoToast = (bookmark: Bookmark, label = t("undo.action.archive")) => {
     setLastSwipe(bookmark);
@@ -431,6 +576,10 @@ export default function Home() {
     setSessionArchived(0);
     setSessionLater(0);
     setSessionOpened(0);
+    setRecActive(false);
+    setRecQueue([]);
+    setRecFinished(false);
+    recExcludeRef.current = [];
     loadCounts();
     loadBookmarks()
       .catch((e) => setError(e instanceof Error ? e.message : t("app.error.load")))
@@ -614,6 +763,14 @@ export default function Home() {
   const showHint =
     tab === "inbox" && !folderDeck && deck.length > 0 && !hintDismissed;
 
+  // «Есть 10 минут?»: inbox пуст, всё разложено (unsorted === 0, counts загружены).
+  const recAvailable =
+    tab === "inbox" &&
+    !folderDeck &&
+    deck.length === 0 &&
+    bookmarks.length > 0 &&
+    (counts?.unsorted ?? -1) === 0;
+
   // Dynamic Island прогресс
   const totalForIsland = sessionDone + deck.length;
   const pctIsland = totalForIsland > 0 ? Math.min(100, Math.round((sessionDone / totalForIsland) * 100)) : 0;
@@ -751,6 +908,89 @@ export default function Home() {
                   <SwipeDeck bookmarks={deck} onSwipe={handleSwipe} onOpen={openBookmark} onRetry={retryBookmark} done={sessionDone} showHint={showHint} swipeCount={swipeCount} />
                 </div>
               ) : bookmarks.length > 0 ? (
+                recLoading ? (
+                  <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8">
+                    <div className="size-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                    <p className="text-sm text-muted">{t("recommend.loading")}</p>
+                  </div>
+                ) : recActive && recQueue.length > 0 ? (
+                  <div className="flex flex-1 min-h-0 items-center justify-center px-4 pb-2 md:max-h-[min(820px,calc(100dvh-140px))]">
+                    <SwipeDeck
+                      bookmarks={recQueue}
+                      onSwipe={handleRecSwipe}
+                      onOpen={openRecBookmark}
+                      onRetry={retryBookmark}
+                      showHint={false}
+                      swipeCount={swipeCount}
+                    />
+                  </div>
+                ) : recActive && recFinished ? (
+                  <div className="flex flex-1 flex-col items-center justify-center gap-5 p-8 text-center">
+                    <div className="text-5xl">{recShownRef.current === 0 ? "🤷" : "🎉"}</div>
+                    <p className="max-w-xs text-sm text-muted">
+                      {recShownRef.current === 0
+                        ? t("recommend.empty")
+                        : t("recommend.finished")}
+                    </p>
+                    <div className="mt-1 flex flex-col gap-2.5">
+                      <button
+                        onClick={() => void moreAfterFinish()}
+                        className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 px-8 py-2.5 text-sm font-semibold text-white shadow-lg shadow-purple-500/30 transition-transform active:scale-95"
+                      >
+                        {t("recommend.more")}
+                      </button>
+                      <button
+                        onClick={() => {
+                          telegram?.haptic.selection();
+                          setTimeOpen(true);
+                        }}
+                        className="inline-flex items-center justify-center gap-2 rounded-full bg-surface px-8 py-2.5 text-sm text-text hover:bg-line transition-colors"
+                      >
+                        {t("recommend.change")}
+                      </button>
+                      <button
+                        onClick={closeRecSession}
+                        className="text-sm font-medium text-muted hover:text-text transition-colors"
+                      >
+                        {t("recommend.finish")}
+                      </button>
+                    </div>
+                  </div>
+                ) : recAvailable && !recActive ? (
+                  <div className="flex flex-1 flex-col items-center justify-center gap-5 p-8 text-center">
+                    <motion.div
+                      initial={{ scale: 0.5, opacity: 0, rotate: -8 }}
+                      animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                      transition={{ type: "spring", stiffness: 180, damping: 14 }}
+                      className="text-7xl"
+                    >
+                      🎉
+                    </motion.div>
+                    <div>
+                      <p className="text-xl font-bold text-text">
+                        {t("completion.title", { count: sessionDone, word: tp("words.save", sessionDone) })}
+                      </p>
+                      <p className="mt-1 text-sm text-muted">{t("completion.deckClean")}</p>
+                    </div>
+                    <div className="mt-1 flex flex-col gap-2.5">
+                      <button
+                        onClick={() => void startRecSession(recMinutes)}
+                        className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 px-8 py-2.5 text-sm font-semibold text-white shadow-lg shadow-purple-500/30 transition-transform active:scale-95"
+                      >
+                        {t("recommend.trigger", { minutes: recMinutes })}
+                      </button>
+                      <button
+                        onClick={() => {
+                          telegram?.haptic.selection();
+                          setTimeOpen(true);
+                        }}
+                        className="text-sm font-medium text-accent hover:opacity-80 transition-opacity"
+                      >
+                        {t("recommend.change")}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
                 <div className="flex flex-1 flex-col items-center justify-center gap-5 p-8 text-center">
                   <motion.div
                     initial={{ scale: 0.5, opacity: 0, rotate: -8 }}
@@ -813,7 +1053,7 @@ export default function Home() {
                     </button>
                   </div>
                 </div>
-              ) : (
+                )) : (
                 <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
                   <div className="flex size-20 items-center justify-center rounded-2xl bg-surface text-4xl">
                     📭
@@ -948,6 +1188,46 @@ export default function Home() {
           ) : null}
         </AnimatePresence>
       </div>
+
+      {/* «Есть 10 минут?»: выбор времени */}
+      <AnimatePresence>
+        {timeOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center"
+            onClick={() => setTimeOpen(false)}
+          >
+            <motion.div
+              initial={{ y: 60, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 60, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="w-full max-w-sm rounded-t-3xl border border-line bg-surface p-6 sm:rounded-3xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="text-lg font-bold text-text">{t("recommend.title")}</h2>
+              <p className="mt-1 text-sm text-muted">{t("recommend.subtitle")}</p>
+              <div className="mt-4 grid grid-cols-2 gap-2.5">
+                {[5, 10, 15, 30].map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => void startRecSession(m)}
+                    className={`rounded-2xl px-4 py-3 text-sm font-semibold transition-transform active:scale-95 ${
+                      m === recMinutes
+                        ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-purple-500/30"
+                        : "bg-bg text-text hover:bg-line"
+                    }`}
+                  >
+                    {recMinutesLabel(m)}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Bottom navigation */}
       <motion.nav

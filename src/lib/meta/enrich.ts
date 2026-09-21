@@ -1,6 +1,7 @@
 import { getAdminDb } from "@/lib/db/supabase";
 import type { CardLinkRow, CardRow } from "@/lib/db/types";
 import { setCardMetaStatus } from "@/lib/db/meta";
+import { estimateMinutes } from "@/lib/estimate";
 import { parseUrl, type ParsedMeta, type Provider } from "./parsers";
 import { getMetaFromCache, putMetaToCache } from "./cache";
 
@@ -112,6 +113,13 @@ async function applyMeta(
   if (!card.image_url && meta.image_url) cardPatch.image_url = meta.image_url;
   if (card.duration_seconds == null && meta.duration_seconds != null) {
     cardPatch.duration_seconds = meta.duration_seconds;
+    // Видео получило длительность позже создания — проставляем и оценку времени.
+    if (card.estimated_minutes == null) {
+      cardPatch.estimated_minutes = estimateMinutes({
+        durationSeconds: meta.duration_seconds,
+        kind: "video",
+      });
+    }
   }
   if (Object.keys(cardPatch).length > 0) {
     await db.from("cards").update(cardPatch).eq("id", card.id);

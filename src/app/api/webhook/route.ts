@@ -11,6 +11,7 @@ import {
 } from "@/lib/db/cards";
 import { getOrCreateProfileByTelegramId } from "@/lib/db/profiles";
 import { track } from "@/lib/analytics";
+import { estimateMinutes } from "@/lib/estimate";
 
 export const runtime = "nodejs";
 
@@ -267,6 +268,12 @@ export async function POST(req: NextRequest) {
           media_group_id: mediaGroupId,
           title,
           text: caption || null,
+          estimated_minutes: estimateMinutes({
+            title,
+            text: caption || null,
+            durationSeconds: attachment.duration ?? null,
+            kind: attachment.type,
+          }),
         },
         [attachment]
       );
@@ -294,6 +301,12 @@ export async function POST(req: NextRequest) {
         telegram_message_id: message.message_id ?? null,
         title,
         text: titleText || null,
+        estimated_minutes: estimateMinutes({
+          title,
+          text: titleText || null,
+          durationSeconds: attachment?.duration ?? null,
+          kind: primaryType,
+        }),
       },
       attachment ? [attachment] : [],
       links
