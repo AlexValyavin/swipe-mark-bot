@@ -67,7 +67,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  type InlineButton = { text: string; url?: string; callback_data?: string };
+  type InlineButton = {
+    text: string;
+    url?: string;
+    callback_data?: string;
+    web_app?: { url: string };
+  };
 
   const sendMessage = async (
     toChatId: number,
@@ -163,7 +168,7 @@ export async function POST(req: NextRequest) {
     // Открыть SwipeMark
     if (text0.toLowerCase() === "/open") {
       await reply("Открываем SwipeMark ⚡", [
-        [{ text: "⚡ Открыть SwipeMark", url: APP_URL }],
+        [appButton("⚡ Открыть SwipeMark")],
       ]);
       return NextResponse.json({ ok: true });
     }
@@ -443,6 +448,24 @@ function domainOf(url: string): string | null {
 
 const BOT_USERNAME = process.env.BOT_USERNAME || "SwipeMarkBot";
 const APP_URL = `https://t.me/${BOT_USERNAME}/app`;
+const MINI_APP_URL = (process.env.MINI_APP_URL || "").trim().replace(/\/$/, "");
+
+/**
+ * Кнопка, открывающая Mini App сразу (web_app), без промежуточного чата.
+ * Без MINI_APP_URL — fallback на обычную t.me-ссылку с startapp=deck.
+ * Свежее открытие всегда стартует на колоде (дефолтная вкладка inbox),
+ * поэтому потеря start_param ни на что не влияет.
+ */
+function appButton(text: string): {
+  text: string;
+  url?: string;
+  web_app?: { url: string };
+} {
+  if (MINI_APP_URL.startsWith("https://")) {
+    return { text, web_app: { url: MINI_APP_URL } };
+  }
+  return { text, url: `${APP_URL}?startapp=deck` };
+}
 
 const START_TEXT = [
   "Привет, я SwipeMark ⚡",
@@ -505,7 +528,7 @@ async function sendSavedReply(
   userId: string,
   reply: (
     text: string,
-    buttons?: { text: string; url?: string; callback_data?: string }[][]
+    buttons?: { text: string; url?: string; callback_data?: string; web_app?: { url: string } }[][]
   ) => Promise<void>
 ): Promise<void> {
   let n: number;
@@ -531,9 +554,7 @@ async function sendSavedReply(
     text = `Сохранил ✅\nВ очереди уже ${n} сохранёнок. Самое время разобрать первые 10.`;
   }
 
-  await reply(text, [
-    [{ text: `Разобрать ${n} ${pluralSave(n)}`, url: `${APP_URL}?startapp=deck` }],
-  ]);
+  await reply(text, [[appButton(`Разобрать ${n} ${pluralSave(n)}`)]]);
 }
 
 /**
@@ -610,7 +631,7 @@ function kickMetaEnrich(userId: string, cardId: string): void {
 async function handleAdminLogin(
   fromId: number,
   code: string,
-  reply: (text: string, buttons?: { text: string; url?: string; callback_data?: string }[][]) => Promise<void>
+  reply: (text: string, buttons?: { text: string; url?: string; callback_data?: string; web_app?: { url: string } }[][]) => Promise<void>
 ): Promise<void> {
   const ownerTgId = Number(String(process.env.OWNER_TELEGRAM_ID || "").trim() || 0);
   if (!ownerTgId || Number(fromId) !== ownerTgId) {
@@ -636,7 +657,7 @@ async function handleStart(
   code: string | null,
   reply: (
     text: string,
-    buttons?: { text: string; url?: string; callback_data?: string }[][]
+    buttons?: { text: string; url?: string; callback_data?: string; web_app?: { url: string } }[][]
   ) => Promise<void>
 ): Promise<void> {
   const { consumePairingCode, markCodeUsed, linkTelegram } = await import(
@@ -648,7 +669,7 @@ async function handleStart(
 
   if (!code) {
     await reply(START_TEXT, [
-      [{ text: "⚡ Открыть SwipeMark", url: APP_URL }],
+      [appButton("⚡ Открыть SwipeMark")],
       [
         { text: "📥 Как сохранять", callback_data: "how" },
         { text: "❓ Помощь", callback_data: "help" },
